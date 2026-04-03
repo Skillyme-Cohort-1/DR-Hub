@@ -84,7 +84,7 @@ export const LoginPage = () => {
             <div className="relative isolate hidden h-full min-h-screen w-full overflow-hidden bg-[url('/login-banner.jpeg')] bg-cover bg-center bg-no-repeat lg:flex lg:flex-col lg:justify-center">
                 <div className="absolute inset-0 bg-gradient-to-r from-[#05080d]/98 via-[#05080d]/72 to-transparent"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/35"></div>
-                <div className="relative z-10 flex h-full w-full flex-col justify-center gap-5 p-8 text-start lg:p-10">
+                <div className="relative z-10 flex h-full max-w-160 flex-col justify-center gap-5 p-8 text-start lg:p-10">
                     <h2 className="lg:text-lg text-sm font-bold text-[#EC7B1D]">PREMIUM LEGAL WORKSPACE</h2>
                     <h1 className="max-w-3xl text-slate-200 lg:text-4xl text-2xl">
                         Professional Meeting Spaces in the Heart of Westlands
@@ -92,7 +92,7 @@ export const LoginPage = () => {
                     <p className="max-w-3xl text-slate-100 lg:text-xl text-lg">
                         Join hundreds of legal professionals who trust The DR Hub for their dispute resolution needs.
                     </p>
-                    <ul className="mx-auto w-fit list-disc marker:text-orange-500 text-start text-lg flex flex-col gap-3 pl-5">
+                    <ul className="mx-auto list-disc marker:text-orange-500 text-start text-lg flex flex-col gap-3 pl-5  w-full">
                         <li>Soundproofed boardrooms & private offices</li>
                         <li>High-speed WiFi & AV equipment</li>
                         <li>Complimentary parking & refreshments</li>
