@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+const SIDEBAR_BREAKPOINT = 960;
 
 // ─── MOCK DATA ───────────────────────────────────────────────────────────────
 const INITIAL_BOOKINGS = [
@@ -27,10 +29,24 @@ const DAYS  = ["Mon 30 Mar", "Tue 31 Mar", "Wed 1 Apr", "Thu 2 Apr", "Fri 3 Apr"
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
   .dh-wrap * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
-  .dh-wrap { display: flex; height: 100vh; background: #0D0D0D; color: #F0EDE8; overflow: hidden; font-size: 13px; }
+  .dh-wrap { display: flex; width: 100%; min-height: 100vh; min-height: 100dvh; background: #0a0a0a; color: #F0EDE8; overflow: hidden; font-size: 13px; }
 
   /* SIDEBAR */
-  .dh-sidebar { width: 220px; flex-shrink: 0; background: #161616; border-right: 1px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; }
+  .dh-sidebar { width: 248px; flex-shrink: 0; background: linear-gradient(180deg, #141414 0%, #101010 100%); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; transition: width 0.22s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
+  .dh-sidebar--collapsed { width: 72px; }
+  .dh-sidebar--collapsed .dh-logo-the,
+  .dh-sidebar--collapsed .dh-logo-badge,
+  .dh-sidebar--collapsed .dh-nav-label,
+  .dh-sidebar--collapsed .dh-nav-text,
+  .dh-sidebar--collapsed .dh-user-info { display: none !important; }
+  .dh-sidebar--collapsed .dh-logo-dr { font-size: 17px; letter-spacing: -0.5px; }
+  .dh-sidebar--collapsed .dh-logo { padding: 20px 12px; text-align: center; }
+  .dh-sidebar--collapsed .dh-nav-item { justify-content: center; padding: 11px 10px; gap: 0; }
+  .dh-sidebar--collapsed .dh-nav-count { position: absolute; top: 4px; right: 2px; margin: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9px; display: flex; align-items: center; justify-content: center; }
+  .dh-sidebar--collapsed .dh-nav-item { position: relative; }
+  .dh-sidebar--collapsed .dh-user { justify-content: center; padding: 14px 10px; }
+  .dh-sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 90; backdrop-filter: blur(2px); }
+  .dh-sidebar-backdrop--visible { display: block; }
   .dh-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
   .dh-logo-the { font-size: 10px; letter-spacing: 3px; color: #888; text-transform: uppercase; }
   .dh-logo-dr { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 900; line-height: 1; }
@@ -38,7 +54,9 @@ const css = `
   .dh-logo-badge { display: inline-block; background: rgba(240,123,43,0.12); color: #F07B2B; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; margin-top: 6px; border: 1px solid rgba(240,123,43,0.2); }
   .dh-nav { flex: 1; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
   .dh-nav-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #555; padding: 10px 10px 4px; font-weight: 600; }
-  .dh-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; cursor: pointer; color: #888; font-size: 12px; font-weight: 500; border: 1px solid transparent; transition: all 0.15s; }
+  .dh-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; color: #888; font-size: 12px; font-weight: 500; border: 1px solid transparent; transition: all 0.15s; width: 100%; text-align: left; background: transparent; font-family: inherit; }
+  .dh-nav-ico { font-size: 15px; line-height: 1; flex-shrink: 0; width: 22px; text-align: center; }
+  .dh-nav-text { flex: 1; min-width: 0; }
   .dh-nav-item:hover { background: rgba(255,255,255,0.04); color: #F0EDE8; }
   .dh-nav-item.active { background: rgba(240,123,43,0.12); color: #F07B2B; border-color: rgba(240,123,43,0.15); }
   .dh-nav-count { margin-left: auto; background: #F07B2B; color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 20px; }
@@ -46,11 +64,16 @@ const css = `
   .dh-av { width: 32px; height: 32px; border-radius: 50%; background: #F07B2B; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
 
   /* MAIN */
-  .dh-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .dh-topbar { padding: 16px 28px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: space-between; background: #161616; flex-shrink: 0; }
-  .dh-topbar h1 { font-size: 16px; font-weight: 700; }
-  .dh-topbar p { font-size: 11px; color: #888; margin-top: 2px; }
-  .dh-topbar-right { display: flex; align-items: center; gap: 10px; }
+  .dh-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: #0a0a0a; }
+  .dh-topbar { padding: 14px 20px 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; background: rgba(18,18,18,0.92); backdrop-filter: blur(12px); flex-shrink: 0; gap: 12px; }
+  .dh-topbar-left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; flex: 1; }
+  .dh-menu-toggle { flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #F0EDE8; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background 0.15s, border-color 0.15s; }
+  .dh-menu-toggle:hover { background: rgba(240,123,43,0.12); border-color: rgba(240,123,43,0.35); }
+  .dh-menu-toggle:focus-visible { outline: 2px solid #F07B2B; outline-offset: 2px; }
+  .dh-topbar-titles { min-width: 0; }
+  .dh-topbar h1 { font-size: clamp(15px, 2.5vw, 18px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
+  .dh-topbar p { font-size: 11px; color: #888; margin-top: 3px; }
+  .dh-topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .dh-chip { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 7px 12px; font-size: 11px; color: #888; }
   .dh-notif { width: 34px; height: 34px; background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; position: relative; transition: border-color 0.2s; }
   .dh-notif:hover { border-color: #F07B2B; }
@@ -59,12 +82,12 @@ const css = `
   .dh-btn-primary:hover { background: #fff; color: #F07B2B; }
 
   /* CONTENT */
-  .dh-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .dh-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 20px 28px; width: 100%; max-width: none; }
   .dh-content::-webkit-scrollbar { width: 4px; }
   .dh-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
   /* STATS */
-  .dh-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 22px; }
+  .dh-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
   .dh-stat { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; cursor: default; transition: border-color 0.2s; }
   .dh-stat:hover { border-color: rgba(255,255,255,0.15); }
   .dh-stat-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
@@ -75,8 +98,9 @@ const css = `
   .dh-badge-warn { background: rgba(245,158,11,0.12); color: #F59E0B; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
 
   /* PANELS */
-  .dh-grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; margin-bottom: 18px; }
-  .dh-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .dh-grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px; margin-bottom: 18px; align-items: stretch; }
+  .dh-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; }
+  .dh-leads-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 20px; }
   .dh-panel { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden; }
   .dh-panel-hd { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; justify-content: space-between; align-items: center; }
   .dh-panel-title { font-size: 13px; font-weight: 600; }
@@ -207,6 +231,34 @@ const css = `
   .dh-search { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 7px 12px; font-family: 'DM Sans', sans-serif; font-size: 12px; color: #F0EDE8; outline: none; width: 200px; transition: border-color 0.2s; }
   .dh-search:focus { border-color: #F07B2B; }
   .dh-search::placeholder { color: #555; }
+
+  @media (max-width: 959px) {
+    .dh-sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: min(288px, 88vw); max-width: 100%; transform: translateX(-100%); box-shadow: none; z-index: 200; }
+    .dh-sidebar--open { transform: translateX(0); box-shadow: 16px 0 48px rgba(0,0,0,0.55); }
+    .dh-sidebar-backdrop--visible { display: block; }
+    .dh-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dh-grid2 { grid-template-columns: 1fr; }
+    .dh-grid3 { grid-template-columns: 1fr; }
+    .dh-leads-grid { grid-template-columns: 1fr; padding: 16px; }
+    .dh-topbar-right .dh-chip { display: none; }
+    .dh-content { padding: 16px 14px 24px; }
+    .dh-topbar { padding: 12px 14px; }
+  }
+  @media (max-width: 520px) {
+    .dh-stats { grid-template-columns: 1fr; }
+    .dh-btn-primary { padding: 8px 12px; font-size: 11px; }
+    .dh-filter-bar { flex-direction: column; align-items: stretch; }
+    .dh-search { width: 100%; margin-left: 0 !important; }
+  }
+  @media (min-width: 960px) {
+    .dh-sidebar-backdrop { display: none !important; }
+  }
+  @media (min-width: 960px) and (max-width: 1199px) {
+    .dh-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dh-grid2 { grid-template-columns: 1fr; }
+    .dh-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dh-leads-grid { grid-template-columns: 1fr; }
+  }
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -232,6 +284,11 @@ function Toast({ toasts }) {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
+  const [isMobile, setIsMobile]       = useState(
+    typeof window !== "undefined" ? window.innerWidth < SIDEBAR_BREAKPOINT : false
+  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen]       = useState(false);
   const [activeNav, setActiveNav]     = useState("overview");
   const [bookings, setBookings]       = useState(INITIAL_BOOKINGS);
   const [leads, setLeads]             = useState(INITIAL_LEADS);
@@ -242,10 +299,33 @@ export default function AdminDashboard() {
   const [viewBooking, setViewBooking] = useState(null);
   const [newBooking, setNewBooking]   = useState({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
   const [noteInputs, setNoteInputs]   = useState({});
+  const toastIdRef = useRef(0);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
+    const sync = () => {
+      setIsMobile(mq.matches);
+      if (!mq.matches) setMobileMenuOpen(false);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+  const toggleSidebar = () => {
+    if (isMobile) setMobileMenuOpen((o) => !o);
+    else setSidebarCollapsed((c) => !c);
+  };
+
+  const pickNav = (id) => {
+    setActiveNav(id);
+    if (isMobile) closeMobileMenu();
+  };
 
   // ── TOAST ──
   const addToast = (msg, color = "orange", icon = "✓") => {
-    const id = Date.now();
+    const id = ++toastIdRef.current;
     setToasts(p => [...p, { id, msg, color, icon }]);
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000);
   };
@@ -334,15 +414,23 @@ export default function AdminDashboard() {
     <>
       <style>{css}</style>
       <div className="dh-wrap">
+        <div
+          className={`dh-sidebar-backdrop ${isMobile && mobileMenuOpen ? "dh-sidebar-backdrop--visible" : ""}`}
+          aria-hidden="true"
+          onClick={closeMobileMenu}
+        />
 
         {/* SIDEBAR */}
-        <aside className="dh-sidebar">
+        <aside
+          className={`dh-sidebar ${!isMobile && sidebarCollapsed ? "dh-sidebar--collapsed" : ""} ${isMobile && mobileMenuOpen ? "dh-sidebar--open" : ""}`}
+          aria-label="Main navigation"
+        >
           <div className="dh-logo">
             <div className="dh-logo-the">The</div>
             <div className="dh-logo-dr">DR<span>hub</span></div>
             <div className="dh-logo-badge">Admin Panel</div>
           </div>
-          <nav className="dh-nav">
+          <nav id="admin-sidebar-nav" className="dh-nav">
             <div className="dh-nav-label">Main</div>
             {[
               { id:"overview",      icon:"📊", label:"Overview" },
@@ -350,10 +438,11 @@ export default function AdminDashboard() {
               { id:"calendar",      icon:"🗓️",  label:"Calendar" },
               { id:"clients",       icon:"👥", label:"Clients" },
             ].map(n => (
-              <div key={n.id} className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => setActiveNav(n.id)}>
-                <span>{n.icon}</span> {n.label}
+              <button key={n.id} type="button" className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => pickNav(n.id)}>
+                <span className="dh-nav-ico" aria-hidden>{n.icon}</span>
+                <span className="dh-nav-text">{n.label}</span>
                 {n.count > 0 && <span className="dh-nav-count">{n.count}</span>}
-              </div>
+              </button>
             ))}
             <div className="dh-nav-label">Management</div>
             {[
@@ -361,15 +450,16 @@ export default function AdminDashboard() {
               { id:"notifications", icon:"🔔", label:"Notifications", count: pendingCount },
               { id:"analytics",     icon:"📈", label:"Analytics" },
             ].map(n => (
-              <div key={n.id} className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => setActiveNav(n.id)}>
-                <span>{n.icon}</span> {n.label}
+              <button key={n.id} type="button" className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => pickNav(n.id)}>
+                <span className="dh-nav-ico" aria-hidden>{n.icon}</span>
+                <span className="dh-nav-text">{n.label}</span>
                 {n.count > 0 && <span className="dh-nav-count">{n.count}</span>}
-              </div>
+              </button>
             ))}
           </nav>
           <div className="dh-user">
             <div className="dh-av">BO</div>
-            <div>
+            <div className="dh-user-info">
               <div style={{fontSize:12,fontWeight:600}}>Breattah Okeyo</div>
               <div style={{fontSize:10,color:"#888"}}>Administrator</div>
             </div>
@@ -379,8 +469,19 @@ export default function AdminDashboard() {
         {/* MAIN */}
         <main className="dh-main">
           {/* TOPBAR */}
-          <div className="dh-topbar">
+          <header className="dh-topbar">
             <div className="dh-topbar-left">
+              <button
+                type="button"
+                className="dh-menu-toggle"
+                onClick={toggleSidebar}
+                aria-expanded={isMobile ? mobileMenuOpen : !sidebarCollapsed}
+                aria-controls="admin-sidebar-nav"
+                title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {isMobile ? (mobileMenuOpen ? "✕" : "☰") : sidebarCollapsed ? "→" : "←"}
+              </button>
+              <div className="dh-topbar-titles">
               <h1>
                 {activeNav === "overview"      && "Good morning, Breattah 👋"}
                 {activeNav === "bookings"      && "Bookings"}
@@ -391,6 +492,7 @@ export default function AdminDashboard() {
                 {activeNav === "analytics"     && "Analytics"}
               </h1>
               <p>DR Hub Admin · Wednesday, 1 April 2026</p>
+              </div>
             </div>
             <div className="dh-topbar-right">
               <div className="dh-chip">📅 Wed 1 Apr 2026</div>
@@ -399,7 +501,7 @@ export default function AdminDashboard() {
               </div>
               <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
             </div>
-          </div>
+          </header>
 
           {/* CONTENT */}
           <div className="dh-content">
@@ -453,7 +555,7 @@ export default function AdminDashboard() {
                         <div className="dh-panel-title">Recent Bookings</div>
                         <div className="dh-panel-sub">Pending approvals need action</div>
                       </div>
-                      <button className="dh-panel-link" onClick={() => setActiveNav("bookings")}>View all →</button>
+                      <button className="dh-panel-link" onClick={() => pickNav("bookings")}>View all →</button>
                     </div>
                     <div className="dh-table-wrap">
                       <table className="dh-table">
@@ -490,7 +592,7 @@ export default function AdminDashboard() {
                         <div className="dh-panel-title">This Week</div>
                         <div className="dh-panel-sub">Room availability at a glance</div>
                       </div>
-                      <button className="dh-panel-link" onClick={() => setActiveNav("calendar")}>Full view →</button>
+                      <button className="dh-panel-link" onClick={() => pickNav("calendar")}>Full view →</button>
                     </div>
                     <div className="dh-cal">
                       <div className="dh-cal-hd">
@@ -780,7 +882,7 @@ export default function AdminDashboard() {
                   }}>+ Add Lead</button>
                 </div>
                 {/* Pipeline columns */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,padding:20}}>
+                <div className="dh-leads-grid">
                   {["new","follow-up","converted"].map(stage => (
                     <div key={stage} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:14,border:"1px solid rgba(255,255,255,0.07)"}}>
                       <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:12,
