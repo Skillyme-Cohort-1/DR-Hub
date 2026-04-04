@@ -1,11 +1,22 @@
-import { BrowserRouter, Routes, Route } from 'react-router'
-import { ClientDashboard } from './app/pages/ClientDashboardPage'
+import { useState } from 'react'
+import './App.css';
+
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
+import HomePage from './app/pages/HomePage';
+import { LoginPage } from './app/pages/LoginPage'
+import { RegisterPage } from './app/pages/RegisterPage'
+import { BookingPage } from './app/pages/BookingPage'
+
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ClientDashboard />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/booking" element={<BookingPage />} />
       </Routes>
     </BrowserRouter>
   )
