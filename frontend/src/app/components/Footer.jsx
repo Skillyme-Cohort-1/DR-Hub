@@ -1,67 +1,112 @@
-import { Logo } from './Logo';
-import { Mail, Phone } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { Logo } from "./Logo";
+import { Mail, Phone, MapPin } from "lucide-react";
+
+const exploreLinks = [
+  { label: "Rooms", to: "/#rooms" },
+  { label: "Amenities", to: "/#amenities" },
+  { label: "How it works", to: "/#process" },
+  { label: "Reviews", to: "/#testimonials" },
+];
+
+const accountLinks = [
+  { label: "Book a space", to: "/booking" },
+  { label: "Sign in", to: "/login" },
+  { label: "Create account", to: "/register" },
+];
 
 export function Footer() {
-  const quickLinks = ['Rooms', 'Pricing', 'Book', 'Contact'];
-
   return (
-    <footer className="bg-[#0A0A0A] text-white border-t border-white/5">
-      <div className="max-w-[1280px] mx-auto px-6 py-20">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-16">
-          {/* Left - Logo & Tagline */}
-          <div>
-            <Logo className="mb-6 text-white" />
-            <p className="text-white/40 text-sm tracking-wider leading-relaxed">
+    <footer id="contact" className="relative border-t border-white/10 bg-[#050505] text-white">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E87722]/40 to-transparent" />
+      <div className="mx-auto max-w-[1280px] px-4 py-16 sm:px-6 lg:py-20">
+        <div className="grid gap-12 lg:grid-cols-12 lg:gap-10">
+          <div className="lg:col-span-4">
+            <Logo className="mb-5 text-white" />
+            <p className="max-w-sm text-sm leading-relaxed text-white/55">
+              Premium meeting and workspace for advocates, ADR practitioners, and DR Hub members — quiet,
+              connected, and in the heart of Westlands.
+            </p>
+            <p className="mt-6 text-xs uppercase tracking-[0.2em] text-white/35">
               Mediation · Conciliation · Negotiation · Arbitration
             </p>
           </div>
 
-          {/* Center - Quick Links */}
-          <div>
-            <h4 className="text-white mb-6 text-sm uppercase tracking-widest">Quick Links</h4>
-            <ul className="space-y-3">
-              {quickLinks.map((link) => (
-                <li key={link}>
-                  <a
-                    href={`/#${link.toLowerCase()}`}
-                    className="text-white/60 hover:text-[#E87722] transition-colors text-sm"
-                  >
-                    {link}
-                  </a>
-                </li>
-              ))}
-            </ul>
+          <div className="grid gap-10 sm:grid-cols-2 lg:col-span-5 lg:grid-cols-2">
+            <div>
+              <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
+                Explore
+              </h4>
+              <ul className="space-y-3">
+                {exploreLinks.map(({ label, to }) => (
+                  <li key={to}>
+                    <Link
+                      to={to}
+                      className="text-sm text-white/55 transition-colors hover:text-[#E87722]"
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
+                Members
+              </h4>
+              <ul className="space-y-3">
+                {accountLinks.map(({ label, to }) => (
+                  <li key={to}>
+                    <Link
+                      to={to}
+                      className="text-sm text-white/55 transition-colors hover:text-[#E87722]"
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
-          {/* Right - Contact Info */}
-          <div>
-            <h4 className="text-white mb-6 text-sm uppercase tracking-widest">Contact</h4>
-            <div className="space-y-4">
-              <a
-                href="mailto:disputeresolutionhub@gmail.com"
-                className="flex items-center gap-3 text-white/60 hover:text-[#E87722] transition-colors group"
-              >
-                <Mail className="w-4 h-4" />
-                <span className="text-sm">disputeresolutionhub@gmail.com</span>
-              </a>
-              <a
-                href="tel:0113907602"
-                className="flex items-center gap-3 text-white/60 hover:text-[#E87722] transition-colors group"
-              >
-                <Phone className="w-4 h-4" />
-                <span className="text-sm">0113907602</span>
-              </a>
-            </div>
+          <div className="lg:col-span-3">
+            <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-white/90">
+              Contact
+            </h4>
+            <ul className="space-y-4">
+              <li>
+                <a
+                  href="mailto:disputeresolutionhub@gmail.com"
+                  className="group flex gap-3 text-sm text-white/55 transition-colors hover:text-[#E87722]"
+                >
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-[#E87722]/80 group-hover:text-[#E87722]" />
+                  <span className="break-all">disputeresolutionhub@gmail.com</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href="tel:0113907602"
+                  className="group flex gap-3 text-sm text-white/55 transition-colors hover:text-[#E87722]"
+                >
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-[#E87722]/80 group-hover:text-[#E87722]" />
+                  <span>0113 907 602</span>
+                </a>
+              </li>
+              <li>
+                <div className="flex gap-3 text-sm text-white/55">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#E87722]/80" />
+                  <span>Westlands Business Park, 3rd Floor, Nairobi</span>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="border-t border-white/5">
-        <div className="max-w-[1280px] mx-auto px-6 py-6">
-          <p className="text-center text-white/40 text-xs tracking-wide">
-            © 2026 The DR Hub. All rights reserved.
-          </p>
+      <div className="border-t border-white/[0.06]">
+        <div className="mx-auto flex max-w-[1280px] flex-col items-center justify-between gap-3 px-4 py-6 text-center sm:flex-row sm:text-left sm:px-6">
+          <p className="text-xs text-white/40">© {new Date().getFullYear()} The DR Hub. All rights reserved.</p>
+          <p className="text-xs text-white/35">Professional spaces for confidential legal work.</p>
         </div>
       </div>
     </footer>

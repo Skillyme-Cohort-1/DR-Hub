@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import './App.css';
 
-
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import HomePage from './app/pages/HomePage';
 
-import { LandingPage } from './app/pages/LandingPage'
+import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage'
 import { RegisterPage } from './app/pages/RegisterPage'
 import { BookingPage } from './app/pages/BookingPage'
 
-function App() {
+
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
