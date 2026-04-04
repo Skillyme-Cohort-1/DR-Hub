@@ -30,7 +30,7 @@ export const LoginPage = () => {
                                 placeholder="your.email@example.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="h-14 w-full border border-slate-700 bg-gradient-to-r from-[#14171d] to-[#1a1d22] pl-12 pr-4 text-lg text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#EC7B1D]"
+                                className="h-14 w-full border border-slate-700 bg-linear-to-r from-[#14171d] to-[#1a1d22] pl-12 pr-4 text-lg text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#EC7B1D]"
                             />
                         </div>
                     </div>
@@ -45,7 +45,7 @@ export const LoginPage = () => {
                                 placeholder="Enter your password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="h-14 w-full border border-slate-700 bg-gradient-to-r from-[#14171d] to-[#1a1d22] pl-12 pr-12 text-lg text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#EC7B1D]"
+                                className="h-14 w-full border border-slate-700 bg-linear-to-r from-[#14171d] to-[#1a1d22] pl-12 pr-12 text-lg text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#EC7B1D]"
                             />
                             <Eye className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                         </div>
@@ -69,9 +69,9 @@ export const LoginPage = () => {
                     <h1 className="font-semibold text-xl">OR</h1>
                 </div>
 
-                <div className="mt-8 grid grid-rows-2 place-content-center gap-2 text-base text-slate-400 " >
-                    <div className="border-b-2 border-amber-100 pb-4 h-full">
-                        <p>Don&apos;t have an account? <a className="text-[#EC7B1D] hover:text-[#ff8b30]" href="/signup">Book a space to continue</a></p>
+                <div className="mt-8 grid grid-rows-2 gap-2 text-base text-slate-400 w-full  " >
+                    <div className="border-b-2 border-amber-100 pb-4 h-full w-full ">
+                        <p>Don't have an account? <a className="text-[#EC7B1D] hover:text-[#ff8b30]" href="/signup">Book a space to continue</a></p>
                     </div>
                     <div className=" h-full text-center py-5">
                         <p>Admin? <a className="text-[#EC7B1D] hover:text-[#ff8b30]" href="/admin">Login here</a></p>
@@ -82,8 +82,8 @@ export const LoginPage = () => {
 
             </div>
             <div className="relative isolate hidden h-full min-h-screen w-full overflow-hidden bg-[url('/login-banner.jpeg')] bg-cover bg-center bg-no-repeat lg:flex lg:flex-col lg:justify-center">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#05080d]/98 via-[#05080d]/72 to-transparent"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/35"></div>
+                <div className="absolute inset-0 bg-linear-to-r from-black/99 via-black/72 to-transparent"></div>
+                <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/20 to-black/35"></div>
                 <div className="relative z-10 flex h-full max-w-160 flex-col justify-center gap-5 p-8 text-start lg:p-10">
                     <h2 className="lg:text-lg text-sm font-bold text-[#EC7B1D]">PREMIUM LEGAL WORKSPACE</h2>
                     <h1 className="max-w-3xl text-slate-200 lg:text-4xl text-2xl">
