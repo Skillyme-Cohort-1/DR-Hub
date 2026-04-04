@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Navbar } from '../components/Navbar';
+// import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Calendar, Clock, TrendingUp, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
@@ -85,7 +85,7 @@ export function ClientDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
-      <Navbar />
+      {/* <Navbar /> */}
 
       <div className="pt-[72px]">
         <div className="max-w-[1280px] mx-auto px-6 py-12">
