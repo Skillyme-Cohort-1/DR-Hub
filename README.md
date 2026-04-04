@@ -26,12 +26,13 @@ DR Hub currently manages all office bookings manually — through calls, WhatsAp
 
 > *"We build systems that scale."*
 
-| Name | Role | Responsibility |
-|------|------|----------------|
-| **David Dage** | Team Lead · Frontend Dev | Client-side website — booking flow, pricing, UI |
-| **Breattah Okeyo** | Frontend Dev | Admin dashboard — all management views |
-| **Isaac Kahura** | Frontend Dev | Landing page — homepage, branding, services |
-| **William** | Frontend Dev | Login & authentication page |
+| Name | 
+|------|
+| **David Dage** | Team Lead |
+| **Breattah Okeyo** |
+| **Isaac Kahura** | 
+| **William Githinji** | 
+| **Willis Otieno** | 
 
 ---
 
