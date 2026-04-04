@@ -242,7 +242,7 @@ A booking is only confirmed after all three conditions are met:
 
 ---
 
-## ✅ Completed (Week 2)
+## ✅ Completed 
 
 - [x] Full admin dashboard — 9 working views
 - [x] Live approve/reject booking functionality
@@ -255,7 +255,7 @@ A booking is only confirmed after all three conditions are met:
 - [x] Mobile responsiveness (admin — fixed and rebased)
 - [x] Git branching workflow (feature branches + PRs)
 
-## 🔄 Week 3 — Coming Next
+## 🔄 — Coming Next
 
 - [ ] Backend API — Node.js + Express
 - [ ] PostgreSQL database integration
