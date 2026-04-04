@@ -1,10 +1,10 @@
-import { AdminLoginPage } from '../pages/AdminLogin'
-import { LoginPage } from '../pages/LoginPage'
+import { Stepper } from './../components/Stepper';
 
 function App() {
   return (
     <>
-      <AdminLoginPage />
+      
+      <Stepper steps={['Select Room', 'Choose Date', 'Confirm Details', 'Upload Document' ]} currentStep={0} />
     </>
   )
 }
