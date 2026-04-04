@@ -296,7 +296,7 @@ A booking is only confirmed after all three conditions are met:
 ## 🔗 Links
 
 - **GitHub Repository:** https://github.com/Skillyme-Cohort-1/DR-Hub
-  **Live Demo:** Coming soon — deployment in Week 3
+- **Live Demo:** Coming soon — deployment in Week 3
 
 ---
 
