@@ -183,42 +183,67 @@ Opens at **http://localhost:5174**
 
 ```
 DR-Hub/
-├── admin-frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── AnalyticsPanel.jsx
-│   │   │   ├── BookingsTable.jsx
-│   │   │   ├── CalendarPanel.jsx
-│   │   │   ├── LeadsPanel.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── StatsRow.jsx
-│   │   │   └── Topbar.jsx
-│   │   ├── data/
-│   │   │   └── mockData.js
-│   │   ├── pages/
-│   │   │   ├── AdminDashboard.jsx
-│   │   │   └── Dashboard.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   └── ...
 │
-├── client-frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── LandingPage.jsx
-│   │   │   ├── LoginPage.jsx
-│   │   │   ├── BookingPage.jsx
-│   │   │   └── ConfirmationPage.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   └── ...
+├── frontend/                          ← Client-facing website (David Dage)
+│   ├── public/
+│   └── src/
+│       ├── app/
+│       │   ├── components/
+│       │   │   ├── ui/
+│       │   │   │   ├── button.jsx
+│       │   │   │   ├── input.jsx
+│       │   │   │   ├── label.jsx
+│       │   │   │   ├── switch.jsx
+│       │   │   │   ├── tabs.jsx
+│       │   │   │   └── utils.jsx
+│       │   │   ├── Footer.jsx
+│       │   │   ├── Logo.jsx
+│       │   │   └── Navbar.jsx
+│       │   └── pages/
+│       │       ├── BookingPage.jsx
+│       │       ├── ClientDashboardPage.jsx
+│       │       ├── ConfirmationPage.jsx
+│       │       ├── HomePage.jsx
+│       │       ├── LoginPage.jsx
+│       │       ├── NotFound.jsx
+│       │       └── PaymentPage.jsx
+│       ├── assets/
+│       │   ├── hero.png
+│       │   ├── react.svg
+│       │   └── vite.svg
+│       ├── styles/
+│       │   ├── fonts.css
+│       │   ├── index.css
+│       │   ├── tailwind.css
+│       │   └── theme.css
+│       ├── App.css
+│       ├── App.jsx
+│       └── main.jsx
 │
-├── docs/
+├── admin-frontend/                    ← Admin dashboard (Breattah Okeyo)
+│   └── src/
+│       ├── components/
+│       │   ├── AnalyticsPanel.jsx
+│       │   ├── BookingsTable.jsx
+│       │   ├── CalendarPanel.jsx
+│       │   ├── LeadsPanel.jsx
+│       │   ├── Sidebar.jsx
+│       │   ├── StatsRow.jsx
+│       │   └── Topbar.jsx
+│       ├── data/
+│       │   └── mockData.js
+│       ├── pages/
+│       │   ├── AdminDashboard.jsx
+│       │   └── Dashboard.jsx
+│       ├── App.jsx
+│       └── main.jsx
+│
+├── docs/                              ← Project documentation
 │   ├── system-architecture.md
 │   ├── contribution-report.md
 │   └── api-plan.md
 │
-└── README.md                ← you are here
+└── README.md                          ← you are here
 ```
 
 ---
