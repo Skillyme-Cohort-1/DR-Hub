@@ -68,7 +68,7 @@ DR Hub currently manages all office bookings manually — through calls, WhatsAp
 
 ## ⚡ Tech Stack
 
-### Client Side (David Dage)
+### Client Side 
 | Tool | Purpose |
 |------|---------|
 | **React.js / JavaScript** | UI framework |
@@ -77,7 +77,7 @@ DR Hub currently manages all office bookings manually — through calls, WhatsAp
 | **React Router** | Navigation and multi-page routing |
 | **tw-animate-css** | Animation utilities |
 
-### Admin Side (Breattah Okeyo)
+### Admin Side 
 | Tool | Purpose |
 |------|---------|
 | **React.js / JavaScript** | UI framework |
@@ -93,7 +93,7 @@ DR Hub currently manages all office bookings manually — through calls, WhatsAp
 
 ---
 
-## 🖥️ Features Built — Week 2
+## 🖥️ Features Built — 
 
 ### 🌐 Client Side
 - **Landing Page** — DR Hub branding, services overview, amenities, Call-to-Action
