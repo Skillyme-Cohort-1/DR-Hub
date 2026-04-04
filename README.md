@@ -307,7 +307,9 @@ A booking is only confirmed after all three conditions are met:
 | David Dage | Client-side website — booking interface, pricing display, React Router navigation, Tailwind styling |
 | Breattah Okeyo | Admin dashboard — all 9 management views, booking modals, double-booking prevention, calendar, analytics |
 | Isaac Kahura | Landing page — DR Hub branding, hero section, services, amenities, pricing overview |
-| William | Login & authentication page — form UI and validation |
+| Willis Otieno | Login & authentication page — form UI and validation |
+| William Githinji| Booking flow |
+
 
 ---
 
