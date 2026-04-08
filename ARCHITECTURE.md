@@ -322,7 +322,7 @@ sequenceDiagram
 
     alt Password valid
         API->>API: jwt.sign({id, role}, JWT_SECRET)
-        API-->>React: 200 OK + Set-Cookie: token=JWT; httpOnly
+        API-->>React: 200 OK + Set-Cookie: token=JWT: httpOnly
         React->>React: Store user in AuthContext
         React-->>User: Redirect to dashboard
     else Password invalid
