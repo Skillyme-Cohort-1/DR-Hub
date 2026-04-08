@@ -348,6 +348,7 @@ export default function AdminDashboard() {
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const toastIdRef = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -852,6 +853,10 @@ export default function AdminDashboard() {
             <div className="dh-user-info">
               <div style={{fontSize:12,fontWeight:600}}>{user?.name || "Administrator"}</div>
               <div style={{fontSize:10,color:"#888"}}>{user?.role || "ADMIN"}</div>
+            <div className="dh-av">BO</div>
+            <div className="dh-user-info">
+              <div style={{fontSize:12,fontWeight:600}}>Breattah Okeyo</div>
+              <div style={{fontSize:10,color:"#888"}}>Administrator</div>
             </div>
           </div>
         </aside>
@@ -1290,6 +1295,29 @@ export default function AdminDashboard() {
                             </td>
                           </tr>
                         ))}
+                  <div className="dh-panel-title">All Clients</div>
+                  <input className="dh-search" placeholder="Search client..." value={search} onChange={e => setSearch(e.target.value)}/>
+                </div>
+                <div className="dh-table-wrap">
+                  <table className="dh-table">
+                    <thead><tr><th>Client</th><th>Type</th><th>Bookings</th><th>Total Spent</th><th>Last Booking</th><th>Doc</th></tr></thead>
+                    <tbody>
+                      {[...new Map(bookings.map(b => [b.name, b])).values()]
+                        .filter(b => b.name.toLowerCase().includes(search.toLowerCase()))
+                        .map(b => {
+                          const clientBookings = bookings.filter(bk => bk.name === b.name);
+                          const totalSpent = clientBookings.filter(bk=>bk.payment==="paid").reduce((s,bk)=>s+bk.amount,0);
+                          return (
+                            <tr key={b.name}>
+                              <td><div className="dh-client-cell"><Avatar initials={b.initials} color={b.color} size={34}/><div><div className="dh-cname">{b.name}</div><div className="dh-ctype">{b.type}</div></div></div></td>
+                              <td><span className="dh-slot-badge">{b.type}</span></td>
+                              <td style={{fontWeight:700}}>{clientBookings.length}</td>
+                              <td><span className="dh-amount">{totalSpent.toLocaleString()}</span></td>
+                              <td style={{color:"#888",fontSize:11}}>{b.date}</td>
+                              <td style={{textAlign:"center"}}>{b.doc ? "✅" : "❌"}</td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
