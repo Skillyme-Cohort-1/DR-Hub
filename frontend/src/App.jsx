@@ -1,12 +1,23 @@
-import { Stepper } from './../components/Stepper';
+import { useState } from 'react'
+import './App.css';
 
-function App() {
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
+import HomePage from './app/pages/HomePage';
+import { LoginPage } from './app/pages/LoginPage'
+import { RegisterPage } from './app/pages/RegisterPage'
+import { BookingPage } from './app/pages/BookingPage'
+
+
+export default function App() {
   return (
-    <>
-      
-      <Stepper steps={['Select Room', 'Choose Date', 'Confirm Details', 'Upload Document' ]} currentStep={0} />
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/booking" element={<BookingPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
-
-export default App
