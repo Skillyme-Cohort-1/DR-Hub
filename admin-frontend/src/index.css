@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+=======
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+>>>>>>> 006d165c34ee3c88bd1c6cb0d8afdd1ed173849e
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -341,4 +348,8 @@ code {
   html {
     @apply font-sans;
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 006d165c34ee3c88bd1c6cb0d8afdd1ed173849e
