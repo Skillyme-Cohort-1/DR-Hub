@@ -13,10 +13,19 @@ function signAccessToken(user) {
     {
       sub: user.id,
       email: user.email,
+      role: user.role,
     },
     process.env.JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
+}
+
+function verifyAccessToken(token) {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not configured.');
+  }
+
+  return jwt.verify(token, process.env.JWT_SECRET);
 }
 
 function generateResetToken() {
@@ -33,6 +42,7 @@ function hashToken(rawToken) {
 
 module.exports = {
   signAccessToken,
+  verifyAccessToken,
   generateResetToken,
   hashToken,
 };
