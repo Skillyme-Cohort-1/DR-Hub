@@ -1,5 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react'
-<<<<<<< HEAD
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
@@ -116,27 +116,5 @@ function App() {
       <div className="ticks"></div>
       <section id="spacer"></section>
     </>
-=======
-import './App.css';
-
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-
-import HomePage from './app/pages/HomePage';
-import { LoginPage } from './app/pages/LoginPage'
-import { RegisterPage } from './app/pages/RegisterPage'
-import { BookingPage } from './app/pages/BookingPage'
-
-
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/booking" element={<BookingPage />} />
-      </Routes>
-    </BrowserRouter>
->>>>>>> 006d165c34ee3c88bd1c6cb0d8afdd1ed173849e
   )
 }
