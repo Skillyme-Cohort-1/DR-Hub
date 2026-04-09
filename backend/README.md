@@ -275,6 +275,9 @@ Authorization rules:
 ### Create Document
 
 - `POST /api/documents`
+- Content type:
+  - `multipart/form-data` with file field `document`, or
+  - JSON body with `documentFile` URL/path
 
 Request body:
 
@@ -287,6 +290,12 @@ Request body:
 }
 ```
 
+Form-data example:
+
+- `documentName`: `Practicing License`
+- `status`: `PENDING`
+- `document`: `<select file>`
+
 ### Get All Documents
 
 - `GET /api/documents`
@@ -297,9 +306,17 @@ Request body:
 
 - `GET /api/documents/:id`
 
+Response includes:
+
+- `documentUrl` for frontend preview/open
+- `downloadUrl` for forced file download
+
 ### Update Document
 
 - `PATCH /api/documents/:id`
+- Supports both:
+  - JSON (`documentName`, `documentFile`, `status`)
+  - `multipart/form-data` with optional `document` file upload
 
 Request body (any subset):
 
@@ -314,6 +331,11 @@ Request body (any subset):
 ### Delete Document
 
 - `DELETE /api/documents/:id`
+
+### Download Document File
+
+- `GET /api/documents/:id/download`
+- Returns file as attachment for download (for locally uploaded files).
 
 Allowed document statuses:
 
