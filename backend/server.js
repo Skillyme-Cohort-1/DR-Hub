@@ -1,17 +1,25 @@
-// Main entry file 
 require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
+const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const app = express();
 
-app.use(express.json()); // Parse json bodies
+app.use(express.json());
 
-app.use(cors()); // Enable CORS
+app.use(cors());
 
 app.get('/', (req, res) => {
-  res.send('Hello, World!');
+  res.send('DRHub backend is running.');
 });
 
+app.use('/api/users', userAuthRoutes);
+
+app.use((error, req, res, next) => {
+  console.error(error);
+  return res.status(500).json({
+    message: 'Internal server error.',
+  });
+});
 
 const PORT = process.env.PORT || 3000;
 
