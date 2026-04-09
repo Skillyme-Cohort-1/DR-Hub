@@ -8,6 +8,7 @@ app.use(express.json()); // Parse json bodies
 
 app.use(cors()); // Enable CORS
 
+// Health check
 app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
