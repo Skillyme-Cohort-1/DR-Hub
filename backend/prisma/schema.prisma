@@ -85,3 +85,17 @@ model UserDocument {
 
   @@index([userId])
 }
+
+model Room {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  capacity    Int
+  description String?
+  imageUrl    String?
+  is_active   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // This will connect to bookings later when David adds his model
+  // bookings Booking[]
+}
