@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { API_BASE_URL } from "./config/api";
+import { useAuth } from "./context/AuthContext.jsx";
 
 const SIDEBAR_BREAKPOINT = 960;
 
@@ -24,6 +26,10 @@ const INITIAL_LEADS = [
 const SLOTS = ["10am–1pm", "2pm–5pm", "5pm–8pm"];
 const ROOMS = ["Private Office", "Boardroom", "Combined"];
 const DAYS  = ["Mon 30 Mar", "Tue 31 Mar", "Wed 1 Apr", "Thu 2 Apr", "Fri 3 Apr"];
+const DUMMY_CLIENT_BOOKINGS = [
+  { id: "BK901", room: "Private Office", date: "2026-04-10", slot: "10am–1pm", status: "confirmed", amount: 6000 },
+  { id: "BK902", room: "Boardroom", date: "2026-04-14", slot: "2pm–5pm", status: "pending", amount: 2500 },
+];
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const css = `
@@ -270,6 +276,13 @@ function StatusBadge({ status }) {
   return <span className={`dh-status s-${status}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
 }
 
+function mapDocumentStatus(apiStatus) {
+  const normalized = String(apiStatus || "").toUpperCase();
+  if (normalized === "APPROVED") return "Verified";
+  if (normalized === "DECLINED") return "Declined";
+  return "Pending";
+}
+
 function Toast({ toasts }) {
   return (
     <div className="dh-toast-wrap">
@@ -284,6 +297,7 @@ function Toast({ toasts }) {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
+  const { user, token, logout } = useAuth();
   const [isMobile, setIsMobile]       = useState(
     typeof window !== "undefined" ? window.innerWidth < SIDEBAR_BREAKPOINT : false
   );
@@ -299,7 +313,34 @@ export default function AdminDashboard() {
   const [viewBooking, setViewBooking] = useState(null);
   const [newBooking, setNewBooking]   = useState({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
   const [noteInputs, setNoteInputs]   = useState({});
+  const [users, setUsers]             = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError]   = useState("");
+  const [usersReload, setUsersReload] = useState(0);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [previewDocument, setPreviewDocument] = useState(null);
+  const [clientDocuments, setClientDocuments] = useState([]);
+  const [clientDocumentsLoading, setClientDocumentsLoading] = useState(false);
+  const [clientDocumentsError, setClientDocumentsError] = useState("");
+  const [userFormError, setUserFormError] = useState("");
+  const [userFormSubmitting, setUserFormSubmitting] = useState(false);
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phoneNumber: "",
+    gender: "",
+    address: "",
+    city: "",
+    country: "",
+    occupation: "",
+    status: "ACTIVE",
+    role: "MEMBER",
+  });
   const toastIdRef = useRef(0);
+  const clientDocInputRef = useRef(null);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -312,6 +353,41 @@ export default function AdminDashboard() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  useEffect(() => {
+    if (activeNav !== "users" && activeNav !== "clients") return;
+
+    const fetchUsers = async () => {
+      if (!token) {
+        setUsersError("Authentication token is missing.");
+        return;
+      }
+
+      setUsersLoading(true);
+      setUsersError("");
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/users`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          setUsersError(data.message || "Failed to fetch users.");
+          return;
+        }
+
+        setUsers(Array.isArray(data.users) ? data.users : []);
+      } catch {
+        setUsersError("Could not reach the users API.");
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [activeNav, token, usersReload]);
+
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleSidebar = () => {
     if (isMobile) setMobileMenuOpen((o) => !o);
@@ -321,6 +397,215 @@ export default function AdminDashboard() {
   const pickNav = (id) => {
     setActiveNav(id);
     if (isMobile) closeMobileMenu();
+  };
+
+  const loadClientDocuments = async (clientId) => {
+    if (!token || !clientId) return;
+    setClientDocumentsLoading(true);
+    setClientDocumentsError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/documents?userId=${encodeURIComponent(clientId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setClientDocumentsError(data.message || "Failed to fetch documents.");
+        return;
+      }
+      setClientDocuments(Array.isArray(data.documents) ? data.documents : []);
+    } catch {
+      setClientDocumentsError("Could not reach documents API.");
+    } finally {
+      setClientDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeNav !== "client-details" || !selectedClient?.id) return;
+    loadClientDocuments(selectedClient.id);
+  }, [activeNav, selectedClient?.id, token]);
+
+  const handleClientDocumentUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!selectedClient || files.length === 0 || !token) return;
+
+    try {
+      const createCalls = files.map((file) =>
+        fetch(`${API_BASE_URL}/api/documents`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: selectedClient.id,
+            documentName: file.name,
+            // backend currently stores string path/url, so we keep filename placeholder
+            documentFile: file.name,
+            status: "PENDING",
+          }),
+        })
+      );
+
+      const results = await Promise.all(createCalls);
+      const failures = results.filter((r) => !r.ok).length;
+      if (failures > 0) {
+        addToast(`${files.length - failures} uploaded, ${failures} failed`, "orange", "!");
+      } else {
+        addToast(`${files.length} document(s) uploaded`, "green", "📄");
+      }
+      await loadClientDocuments(selectedClient.id);
+    } catch {
+      setClientDocumentsError("Could not upload documents.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const updateClientDocumentStatus = async (documentId, status) => {
+    if (!selectedClient || !token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/documents/${documentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        addToast(data.message || "Failed to update document", "red", "✗");
+        return;
+      }
+      addToast(
+        `Document ${status === "APPROVED" ? "approved" : "declined"}`,
+        status === "APPROVED" ? "green" : "red",
+        status === "APPROVED" ? "✓" : "✗"
+      );
+      await loadClientDocuments(selectedClient.id);
+    } catch {
+      addToast("Could not update document", "red", "✗");
+    }
+  };
+
+  const openCreateUserModal = () => {
+    setEditingUserId(null);
+    setUserFormError("");
+    setUserForm({
+      name: "",
+      email: "",
+      password: "",
+      phoneNumber: "",
+      gender: "",
+      address: "",
+      city: "",
+      country: "",
+      occupation: "",
+      status: "INACTIVE",
+      role: "MEMBER",
+    });
+    setShowUserModal(true);
+  };
+
+  const openEditUserModal = (targetUser) => {
+    setEditingUserId(targetUser.id);
+    setUserFormError("");
+    setUserForm({
+      name: targetUser.name || "",
+      email: targetUser.email || "",
+      password: "",
+      phoneNumber: targetUser.phoneNumber || "",
+      gender: targetUser.gender || "",
+      address: targetUser.address || "",
+      city: targetUser.city || "",
+      country: targetUser.country || "",
+      occupation: targetUser.occupation || "",
+      status: targetUser.status || "ACTIVE",
+      role: targetUser.role || "MEMBER",
+    });
+    setShowUserModal(true);
+  };
+
+  const submitUserForm = async () => {
+    if (!token) {
+      setUserFormError("Authentication token is missing.");
+      return;
+    }
+
+    if (!userForm.name.trim() || !userForm.email.trim()) {
+      setUserFormError("Name and email are required.");
+      return;
+    }
+
+    if (!editingUserId && userForm.password.length < 8) {
+      setUserFormError("Password must be at least 8 characters for new users.");
+      return;
+    }
+
+    setUserFormSubmitting(true);
+    setUserFormError("");
+
+    try {
+      if (!editingUserId) {
+        const createResponse = await fetch(`${API_BASE_URL}/api/users/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: userForm.name.trim(),
+            email: userForm.email.trim(),
+            password: userForm.password,
+            role: userForm.role,
+          }),
+        });
+
+        const createData = await createResponse.json().catch(() => ({}));
+        if (!createResponse.ok) {
+          setUserFormError(createData.message || "Failed to create user.");
+          return;
+        }
+
+        addToast("User created successfully", "green", "✓");
+      } else {
+        const updatePayload = {
+          name: userForm.name.trim(),
+          email: userForm.email.trim(),
+          phoneNumber: userForm.phoneNumber || null,
+          gender: userForm.gender || null,
+          address: userForm.address || null,
+          city: userForm.city || null,
+          country: userForm.country || null,
+          occupation: userForm.occupation || null,
+          status: userForm.status,
+          role: userForm.role,
+        };
+
+        const updateResponse = await fetch(`${API_BASE_URL}/api/users/${editingUserId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updatePayload),
+        });
+
+        const updateData = await updateResponse.json().catch(() => ({}));
+        if (!updateResponse.ok) {
+          setUserFormError(updateData.message || "Failed to update user.");
+          return;
+        }
+
+        addToast("User updated successfully", "green", "✓");
+      }
+
+      setShowUserModal(false);
+      setUsersReload((v) => v + 1);
+    } catch {
+      setUserFormError("Could not reach the users API.");
+    } finally {
+      setUserFormSubmitting(false);
+    }
   };
 
   // ── TOAST ──
@@ -437,6 +722,7 @@ export default function AdminDashboard() {
               { id:"bookings",      icon:"📅", label:"Bookings",      count: pendingCount },
               { id:"calendar",      icon:"🗓️",  label:"Calendar" },
               { id:"clients",       icon:"👥", label:"Clients" },
+              { id:"users",         icon:"🧑", label:"Users" },
             ].map(n => (
               <button key={n.id} type="button" className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => pickNav(n.id)}>
                 <span className="dh-nav-ico" aria-hidden>{n.icon}</span>
@@ -458,10 +744,10 @@ export default function AdminDashboard() {
             ))}
           </nav>
           <div className="dh-user">
-            <div className="dh-av">BO</div>
+            <div className="dh-av">{(user?.name || "Admin").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div>
             <div className="dh-user-info">
-              <div style={{fontSize:12,fontWeight:600}}>Breattah Okeyo</div>
-              <div style={{fontSize:10,color:"#888"}}>Administrator</div>
+              <div style={{fontSize:12,fontWeight:600}}>{user?.name || "Administrator"}</div>
+              <div style={{fontSize:10,color:"#888"}}>{user?.role || "ADMIN"}</div>
             </div>
           </div>
         </aside>
@@ -487,6 +773,8 @@ export default function AdminDashboard() {
                 {activeNav === "bookings"      && "Bookings"}
                 {activeNav === "calendar"      && "Schedule Calendar"}
                 {activeNav === "clients"       && "Clients"}
+                {activeNav === "client-details"&& "Client Details"}
+                {activeNav === "users"         && "Users"}
                 {activeNav === "leads"         && "Lead Pipeline"}
                 {activeNav === "notifications" && "Notifications"}
                 {activeNav === "analytics"     && "Analytics"}
@@ -499,6 +787,7 @@ export default function AdminDashboard() {
               <div className="dh-notif" onClick={() => addToast(`${pendingCount} bookings need your approval`, "orange", "🔔")}>
                 🔔<span className="dh-notif-dot"></span>
               </div>
+              <button className="dh-btn-primary" onClick={logout}>Logout</button>
               <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
             </div>
           </header>
@@ -836,29 +1125,286 @@ export default function AdminDashboard() {
             {activeNav === "clients" && (
               <div className="dh-panel">
                 <div className="dh-panel-hd">
-                  <div className="dh-panel-title">All Clients</div>
-                  <input className="dh-search" placeholder="Search client..." value={search} onChange={e => setSearch(e.target.value)}/>
+                  <div className="dh-panel-title">Member Clients</div>
+                  <input className="dh-search" placeholder="Search member..." value={search} onChange={e => setSearch(e.target.value)}/>
                 </div>
+                {usersError && (
+                  <div style={{ padding: "12px 20px", color: "#ffb4b4" }}>
+                    {usersError}
+                  </div>
+                )}
                 <div className="dh-table-wrap">
                   <table className="dh-table">
-                    <thead><tr><th>Client</th><th>Type</th><th>Bookings</th><th>Total Spent</th><th>Last Booking</th><th>Doc</th></tr></thead>
+                    <thead><tr><th>Client</th><th>Email</th><th>Phone</th><th>Gender</th><th>Occupation</th><th>Status</th><th>Created</th></tr></thead>
                     <tbody>
-                      {[...new Map(bookings.map(b => [b.name, b])).values()]
-                        .filter(b => b.name.toLowerCase().includes(search.toLowerCase()))
-                        .map(b => {
-                          const clientBookings = bookings.filter(bk => bk.name === b.name);
-                          const totalSpent = clientBookings.filter(bk=>bk.payment==="paid").reduce((s,bk)=>s+bk.amount,0);
-                          return (
-                            <tr key={b.name}>
-                              <td><div className="dh-client-cell"><Avatar initials={b.initials} color={b.color} size={34}/><div><div className="dh-cname">{b.name}</div><div className="dh-ctype">{b.type}</div></div></div></td>
-                              <td><span className="dh-slot-badge">{b.type}</span></td>
-                              <td style={{fontWeight:700}}>{clientBookings.length}</td>
-                              <td><span className="dh-amount">{totalSpent.toLocaleString()}</span></td>
-                              <td style={{color:"#888",fontSize:11}}>{b.date}</td>
-                              <td style={{textAlign:"center"}}>{b.doc ? "✅" : "❌"}</td>
-                            </tr>
-                          );
-                        })}
+                      {!usersLoading && users
+                        .filter((u) => String(u.role || "").toUpperCase() === "MEMBER")
+                        .filter((u) => {
+                          const q = search.toLowerCase();
+                          return (u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                        }).length === 0 && (
+                          <tr><td colSpan={7}><div className="dh-empty">No member clients found</div></td></tr>
+                        )}
+                      {users
+                        .filter((u) => String(u.role || "").toUpperCase() === "MEMBER")
+                        .filter((u) => {
+                          const q = search.toLowerCase();
+                          return (u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                        })
+                        .map((u) => (
+                          <tr
+                            key={u.id}
+                            onClick={() => {
+                              setSelectedClient(u);
+                              setActiveNav("client-details");
+                            }}
+                          >
+                            <td>
+                              <div className="dh-client-cell">
+                                <Avatar
+                                  initials={(u.name || "Member").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+                                  color="#6c63ff"
+                                  size={34}
+                                />
+                                <div>
+                                  <div className="dh-cname">{u.name || "-"}</div>
+                                  <div className="dh-ctype">Member</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>{u.email || "-"}</td>
+                            <td>{u.phoneNumber || "-"}</td>
+                            <td>{u.gender || "-"}</td>
+                            <td>{u.occupation || "-"}</td>
+                            <td>
+                              <span className={`dh-status ${String(u.status || "").toLowerCase() === "active" ? "s-confirmed" : "s-pending"}`}>
+                                {u.status || "UNKNOWN"}
+                              </span>
+                            </td>
+                            <td style={{color:"#888",fontSize:11}}>
+                              {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ── CLIENT DETAILS ── */}
+            {activeNav === "client-details" && (
+              <div style={{ display: "grid", gap: 18 }}>
+                <div className="dh-panel">
+                  <div className="dh-panel-hd">
+                    <div>
+                      <div className="dh-panel-title">Client Details</div>
+                      <div className="dh-panel-sub">Profile and account information</div>
+                    </div>
+                    <button className="dh-btn-primary" onClick={() => setActiveNav("clients")}>
+                      Back to Clients
+                    </button>
+                  </div>
+                  {!selectedClient ? (
+                    <div className="dh-empty">Select a client from the Clients tab.</div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: 20,
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      <div><strong>Name:</strong> {selectedClient.name || "-"}</div>
+                      <div><strong>Email:</strong> {selectedClient.email || "-"}</div>
+                      <div><strong>Phone:</strong> {selectedClient.phoneNumber || "-"}</div>
+                      <div><strong>Occupation:</strong> {selectedClient.occupation || "-"}</div>
+                      <div><strong>Gender:</strong> {selectedClient.gender || "-"}</div>
+                      <div><strong>Status:</strong> {selectedClient.status || "-"}</div>
+                      <div><strong>Address:</strong> {selectedClient.address || "-"}</div>
+                      <div><strong>City:</strong> {selectedClient.city || "-"}</div>
+                      <div><strong>Country:</strong> {selectedClient.country || "-"}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="dh-panel">
+                  <div className="dh-panel-hd">
+                    <div className="dh-panel-title">Documents</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        ref={clientDocInputRef}
+                        type="file"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={handleClientDocumentUpload}
+                      />
+                      <button
+                        className="dh-btn-primary"
+                        onClick={() => clientDocInputRef.current?.click()}
+                        disabled={!selectedClient}
+                      >
+                        Upload Document
+                      </button>
+                    </div>
+                  </div>
+                  <div className="dh-table-wrap">
+                    <table className="dh-table">
+                      <thead>
+                        <tr><th>ID</th><th>Document</th><th>Type</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody>
+                        {clientDocumentsLoading && (
+                          <tr><td colSpan={6}><div className="dh-empty">Loading documents...</div></td></tr>
+                        )}
+                        {!clientDocumentsLoading && clientDocumentsError && (
+                          <tr><td colSpan={6}><div className="dh-empty">{clientDocumentsError}</div></td></tr>
+                        )}
+                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.length === 0 && (
+                          <tr><td colSpan={6}><div className="dh-empty">No documents found</div></td></tr>
+                        )}
+                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.map((doc) => (
+                          <tr key={doc.id}>
+                            <td style={{ color: "#888", fontSize: 11 }}>{doc.id}</td>
+                            <td>{doc.documentName}</td>
+                            <td>{doc.documentFile || "Uploaded File"}</td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "-"}</td>
+                            <td>
+                              <span className={`dh-status ${String(doc.status).toUpperCase() === "APPROVED" ? "s-confirmed" : String(doc.status).toUpperCase() === "DECLINED" ? "s-rejected" : "s-pending"}`}>
+                                {mapDocumentStatus(doc.status)}
+                              </span>
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="dh-actions">
+                                <button
+                                  className="dh-action-btn btn-view"
+                                  onClick={() => setPreviewDocument(doc)}
+                                >
+                                  Preview
+                                </button>
+                                {String(doc.status).toUpperCase() !== "APPROVED" && (
+                                  <>
+                                    <button
+                                      className="dh-action-btn btn-approve"
+                                      onClick={() => updateClientDocumentStatus(doc.id, "APPROVED")}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      className="dh-action-btn btn-reject"
+                                      onClick={() => updateClientDocumentStatus(doc.id, "DECLINED")}
+                                    >
+                                      Decline
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="dh-panel">
+                  <div className="dh-panel-hd">
+                    <div className="dh-panel-title">Bookings</div>
+                  </div>
+                  <div className="dh-table-wrap">
+                    <table className="dh-table">
+                      <thead>
+                        <tr><th>ID</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Status</th></tr>
+                      </thead>
+                      <tbody>
+                        {DUMMY_CLIENT_BOOKINGS.map((booking) => (
+                          <tr key={booking.id}>
+                            <td style={{ color: "#888", fontSize: 11 }}>{booking.id}</td>
+                            <td>{booking.room}</td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{booking.date}</td>
+                            <td>{booking.slot}</td>
+                            <td><span className="dh-amount">{booking.amount.toLocaleString()}</span></td>
+                            <td><StatusBadge status={booking.status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── USERS ── */}
+            {activeNav === "users" && (
+              <div className="dh-panel">
+                <div className="dh-panel-hd">
+                  <div>
+                    <div className="dh-panel-title">System Users</div>
+                    <div className="dh-panel-sub">
+                      {usersLoading ? "Loading users..." : `${users.length} users`}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="dh-btn-primary" onClick={() => setUsersReload((v) => v + 1)}>
+                      Refresh
+                    </button>
+                    <button className="dh-btn-primary" onClick={openCreateUserModal}>
+                      + New User
+                    </button>
+                  </div>
+                </div>
+
+                {usersError && (
+                  <div style={{ padding: "12px 20px", color: "#ffb4b4" }}>
+                    {usersError}
+                  </div>
+                )}
+
+                <div className="dh-table-wrap">
+                  <table className="dh-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Occupation</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!usersLoading && users.length === 0 && !usersError && (
+                        <tr>
+                          <td colSpan={7}>
+                            <div className="dh-empty">No users found</div>
+                          </td>
+                        </tr>
+                      )}
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td style={{ fontWeight: 600 }}>{u.name || "-"}</td>
+                          <td>{u.email || "-"}</td>
+                          <td>{u.phoneNumber || "-"}</td>
+                          <td>{u.occupation || "-"}</td>
+                          <td>{u.role || "-"}</td>
+                          <td>
+                            <span className={`dh-status ${String(u.status || "").toLowerCase() === "active" ? "s-confirmed" : "s-pending"}`}>
+                              {u.status || "UNKNOWN"}
+                            </span>
+                          </td>
+                          <td style={{ color: "#888", fontSize: 11 }}>
+                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}
+                          </td>
+                          <td>
+                            <button className="dh-action-btn btn-view" onClick={() => openEditUserModal(u)}>
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1135,6 +1681,202 @@ export default function AdminDashboard() {
               <div className="dh-modal-ft">
                 <button className="dh-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
                 <button className="dh-btn-primary" onClick={submitNewBooking}>Create Booking</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── USER FORM MODAL ── */}
+        {showUserModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowUserModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">
+                  {editingUserId ? "Edit User" : "Add User"}
+                </div>
+                <button className="dh-modal-close" onClick={() => setShowUserModal(false)}>
+                  ✕
+                </button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-row">
+                  <div className="dh-form-group">
+                    <label>Name *</label>
+                    <input
+                      value={userForm.name}
+                      onChange={(e) => setUserForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Email *</label>
+                    <input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm((p) => ({ ...p, email: e.target.value }))}
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                </div>
+
+                {!editingUserId && (
+                  <>
+                    <div className="dh-form-group">
+                      <label>Password *</label>
+                      <input
+                        type="password"
+                        minLength={8}
+                        value={userForm.password}
+                        onChange={(e) => setUserForm((p) => ({ ...p, password: e.target.value }))}
+                        placeholder="At least 8 characters"
+                      />
+                    </div>
+                    <div className="dh-form-group">
+                      <label>Role</label>
+                      <select
+                        value={userForm.role}
+                        onChange={(e) => setUserForm((p) => ({ ...p, role: e.target.value }))}
+                      >
+                        <option value="MEMBER">MEMBER</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {editingUserId && (
+                  <>
+                    <div className="dh-form-row">
+                      <div className="dh-form-group">
+                        <label>Phone Number</label>
+                        <input
+                          value={userForm.phoneNumber}
+                          onChange={(e) => setUserForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                          placeholder="+254..."
+                        />
+                      </div>
+                      <div className="dh-form-group">
+                        <label>Gender</label>
+                        <select
+                          value={userForm.gender}
+                          onChange={(e) => setUserForm((p) => ({ ...p, gender: e.target.value }))}
+                        >
+                          <option value="">Not set</option>
+                          <option value="MALE">MALE</option>
+                          <option value="FEMALE">FEMALE</option>
+                          <option value="OTHER">OTHER</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="dh-form-row">
+                      <div className="dh-form-group">
+                        <label>City</label>
+                        <input
+                          value={userForm.city}
+                          onChange={(e) => setUserForm((p) => ({ ...p, city: e.target.value }))}
+                          placeholder="City"
+                        />
+                      </div>
+                      <div className="dh-form-group">
+                        <label>Country</label>
+                        <input
+                          value={userForm.country}
+                          onChange={(e) => setUserForm((p) => ({ ...p, country: e.target.value }))}
+                          placeholder="Country"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="dh-form-group">
+                      <label>Occupation</label>
+                      <input
+                        value={userForm.occupation}
+                        onChange={(e) => setUserForm((p) => ({ ...p, occupation: e.target.value }))}
+                        placeholder="Occupation"
+                      />
+                    </div>
+
+                    <div className="dh-form-group">
+                      <label>Address</label>
+                      <input
+                        value={userForm.address}
+                        onChange={(e) => setUserForm((p) => ({ ...p, address: e.target.value }))}
+                        placeholder="Address"
+                      />
+                    </div>
+
+                    <div className="dh-form-row">
+                      <div className="dh-form-group">
+                        <label>Status</label>
+                        <select
+                          value={userForm.status}
+                          onChange={(e) => setUserForm((p) => ({ ...p, status: e.target.value }))}
+                        >
+                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                      </div>
+                      <div className="dh-form-group">
+                        <label>Role</label>
+                        <select
+                          value={userForm.role}
+                          onChange={(e) => setUserForm((p) => ({ ...p, role: e.target.value }))}
+                        >
+                          <option value="MEMBER">MEMBER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {userFormError && (
+                  <div style={{ color: "#ffb4b4", fontSize: 12 }}>{userFormError}</div>
+                )}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setShowUserModal(false)}>
+                  Cancel
+                </button>
+                <button className="dh-btn-primary" onClick={submitUserForm} disabled={userFormSubmitting}>
+                  {userFormSubmitting ? "Saving..." : editingUserId ? "Save Changes" : "Create User"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── DOCUMENT PREVIEW MODAL ── */}
+        {previewDocument && (
+          <div className="dh-modal-overlay" onClick={() => setPreviewDocument(null)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Document Preview</div>
+                <button className="dh-modal-close" onClick={() => setPreviewDocument(null)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div><strong>Name:</strong> {previewDocument.documentName}</div>
+                <div><strong>Status:</strong> {mapDocumentStatus(previewDocument.status)}</div>
+                <div><strong>Uploaded:</strong> {previewDocument.createdAt ? new Date(previewDocument.createdAt).toLocaleString() : "-"}</div>
+                <div><strong>Reference:</strong> {previewDocument.documentFile || "-"}</div>
+                {String(previewDocument.documentFile || "").startsWith("http") ? (
+                  <a
+                    href={previewDocument.documentFile}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="dh-panel-link"
+                  >
+                    Open document in new tab
+                  </a>
+                ) : (
+                  <div style={{ color: "#888", fontSize: 12 }}>
+                    File content preview is not available yet. This document currently stores a filename reference.
+                  </div>
+                )}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setPreviewDocument(null)}>Close</button>
               </div>
             </div>
           </div>
