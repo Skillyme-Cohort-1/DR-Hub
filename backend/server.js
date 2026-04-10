@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
-const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
+const roomRoutes = require('./src/routes/roomRoutes');  // ← ADD THIS LINE
 const app = express();
 
 app.use(express.json());
