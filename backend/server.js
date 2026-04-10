@@ -4,6 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
+const feedbackRoutes = require('./src/routes/feedback.route');
+
 const app = express();
 
 app.use(express.json());
@@ -17,6 +19,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 app.use((error, req, res, next) => {
   console.error(error);

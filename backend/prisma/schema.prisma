@@ -7,6 +7,75 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id               String                   @id @default(cuid())
+  name             String
+  email            String                   @unique
+  role             Role                     @default(MEMBER)
+  passwordHash     String
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  address          String?
+  city             String?
+  country          String?
+  gender           Gender?
+  phoneNumber      String?                  @unique
+  status           UserStatus               @default(INACTIVE)
+  occupation       String                   @default("Lawyer")
+  activationTokens AccountActivationToken[]
+  resetTokens      PasswordResetToken[]
+  documents        UserDocument[]
+  feedbacks Feedback[] @relation("UserFeedbacks")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AccountActivationToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserDocument {
+  id           String         @id @default(cuid())
+  documentName String
+  documentFile String
+  status       DocumentStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Room {
+  id          String   @id
+  name        String   @unique
+  capacity    Int
+  description String?
+  imageUrl    String?
+  is_active   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+}
+
 enum Role {
   ADMIN
   MEMBER
@@ -29,59 +98,19 @@ enum DocumentStatus {
   DECLINED
 }
 
-model User {
-  id               String                   @id @default(cuid())
-  name             String
-  email            String                   @unique
-  phoneNumber      String?                  @unique
-  gender           Gender?
-  address          String?
-  city             String?
-  country          String?
-  occupation       String                   @default("Lawyer")
-  status           UserStatus               @default(INACTIVE)
-  role             Role                     @default(MEMBER)
-  passwordHash     String
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  resetTokens      PasswordResetToken[]
-  activationTokens AccountActivationToken[]
-  documents        UserDocument[]
-}
 
-model PasswordResetToken {
-  id          String   @id @default(cuid())
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Feedback {
+  id         String   @id @default(uuid())
+  booking_id String?
+  user_id    String
+  rating     Int
+  comment    String?
+  created_at DateTime @default(now())
 
-  @@index([userId])
-}
+  //booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user User @relation("UserFeedbacks", fields: [user_id], references: [id], onDelete: Cascade)
 
-model AccountActivationToken {
-  id          String   @id @default(cuid())
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model UserDocument {
-  id           String         @id @default(cuid())
-  documentName String
-  documentFile String
-  status       DocumentStatus @default(PENDING)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  userId       String
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  @@index([booking_id])
+  @@index([user_id])
+  @@unique([booking_id, user_id])
 }
