@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "./config/api";
 import { useAuth } from "./context/AuthContext.jsx";
+import Rooms from './pages/Rooms';
 
 const SIDEBAR_BREAKPOINT = 960;
 
@@ -341,13 +342,6 @@ export default function AdminDashboard() {
   });
   const toastIdRef = useRef(0);
   const clientDocInputRef = useRef(null);
-  // -- ROOMS STATE --
-  const [roomsData, setRoomsData] = useState([]);
-  const [roomsLoading, setRoomsLoading] = useState(false);
-  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', description: '' });
-  const [editingRoomId, setEditingRoomId] = useState(null);
-  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
-
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -394,14 +388,6 @@ export default function AdminDashboard() {
 
     fetchUsers();
   }, [activeNav, token, usersReload]);
-
-  // Load rooms when navigating to rooms page
-  useEffect(() => {
-    if (activeNav === "rooms") {
-      fetchRooms();
-    }
-  }, [activeNav]);
-
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleSidebar = () => {
@@ -738,6 +724,7 @@ export default function AdminDashboard() {
               { id:"calendar",      icon:"🗓️",  label:"Calendar" },
               { id:"clients",       icon:"👥", label:"Clients" },
               { id:"users",         icon:"🧑", label:"Users" },
+              { id:"rooms",         icon:"🏢", label:"Rooms" },
             ].map(n => (
               <button key={n.id} type="button" className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => pickNav(n.id)}>
                 <span className="dh-nav-ico" aria-hidden>{n.icon}</span>
@@ -1425,6 +1412,103 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+
+{/* ── ROOMS ── */}
+{activeNav === "rooms" && (
+  <div className="dh-panel">
+    <div className="dh-panel-hd">
+      <div>
+        <div className="dh-panel-title">Room Management</div>
+        <div className="dh-panel-sub">Manage office spaces and meeting rooms</div>
+      </div>
+      <button className="dh-btn-primary" onClick={fetchRooms}>🔄 Refresh</button>
+    </div>
+    
+    {/* Add Room Form */}
+    <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+      <h3 style={{ fontSize: '14px', marginBottom: '12px' }}>
+        {editingRoomId ? 'Edit Room' : 'Add New Room'}
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: '12px' }}>
+        <input
+          type="text"
+          placeholder="Room Name"
+          className="dh-search"
+          value={editingRoomId ? editRoomData.name : newRoomData.name}
+          onChange={(e) => editingRoomId 
+            ? setEditRoomData({ ...editRoomData, name: e.target.value })
+            : setNewRoomData({ ...newRoomData, name: e.target.value })
+          }
+        />
+        <input
+          type="number"
+          placeholder="Capacity"
+          className="dh-search"
+          value={editingRoomId ? editRoomData.capacity : newRoomData.capacity}
+          onChange={(e) => editingRoomId
+            ? setEditRoomData({ ...editRoomData, capacity: e.target.value })
+            : setNewRoomData({ ...newRoomData, capacity: e.target.value })
+          }
+        />
+        <input
+          type="text"
+          placeholder="Description"
+          className="dh-search"
+          value={editingRoomId ? editRoomData.description : newRoomData.description}
+          onChange={(e) => editingRoomId
+            ? setEditRoomData({ ...editRoomData, description: e.target.value })
+            : setNewRoomData({ ...newRoomData, description: e.target.value })
+          }
+        />
+        <button
+          className="dh-btn-primary"
+          onClick={editingRoomId ? updateRoom : createRoom}
+        >
+          {editingRoomId ? 'Update Room' : 'Create Room'}
+        </button>
+      </div>
+      {editingRoomId && (
+        <button
+          className="dh-btn-cancel"
+          style={{ marginTop: '10px' }}
+          onClick={() => {
+            setEditingRoomId(null);
+            setEditRoomData({ name: '', capacity: '', description: '' });
+          }}
+        >
+          Cancel Edit
+        </button>
+      )}
+    </div>
+
+    {/* Rooms Grid */}
+    <div className="dh-leads-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+      {roomsLoading && <div className="dh-empty">Loading rooms...</div>}
+      {!roomsLoading && roomsData.length === 0 && (
+        <div className="dh-empty">No rooms found. Create your first room!</div>
+      )}
+      {roomsData.map((room) => (
+        <div key={room.id} className="dh-panel" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#F07B2B' }}>{room.name}</h3>
+            <span className={`dh-status ${room.is_active ? 's-confirmed' : 's-rejected'}`}>
+              {room.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+          <p style={{ marginTop: '8px', color: '#888' }}>👥 Capacity: {room.capacity} people</p>
+          <p style={{ marginTop: '4px', color: '#666', fontSize: '12px' }}>{room.description || 'No description'}</p>
+          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+            <button className="dh-action-btn btn-view" onClick={() => startEditRoom(room)}>✏️ Edit</button>
+            <button className="dh-action-btn btn-reject" onClick={() => deleteRoom(room.id)}>🗑️ Delete</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+            {/* ── ROOMS ── */}
+            {activeNav === "rooms" && <Rooms />}
 
             {/* ── LEADS ── */}
             {activeNav === "leads" && (
