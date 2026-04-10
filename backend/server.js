@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
+const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
 const app = express();
 
 app.use(express.json());
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/rooms', roomRoutes);  // ← ADD THIS LINE
 
 app.use((error, req, res, next) => {
   console.error(error);
