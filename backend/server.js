@@ -5,7 +5,8 @@ const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const feedbackRoutes = require('./src/routes/feedback.route');
-
+const roomRoutes = require('./routes/roomRoutes');
+const paymentRoutes = require('./src/routes/paymentRoute');
 const app = express();
 
 app.use(express.json());
@@ -19,6 +20,9 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 
 app.use((error, req, res, next) => {
