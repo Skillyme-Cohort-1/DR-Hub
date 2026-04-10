@@ -9,6 +9,8 @@ const roomRoutes = require('./src/routes/roomRoutes');
 const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
 const bookingRoutes = require('./src/routes/bookingRoutes');
 const paymentRoutes = require('./src/routes/paymentRoute');
+const feedbackRoutes = require('./src/routes/feedback.route');
+
 const app = express();
 
 app.use(express.json());
@@ -25,6 +27,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/rooms', roomRoutes);  // ← ADD THIS LINE
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 app.use((error, req, res, next) => {
   console.error(error);
