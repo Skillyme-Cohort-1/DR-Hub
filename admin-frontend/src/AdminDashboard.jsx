@@ -341,6 +341,13 @@ export default function AdminDashboard() {
   });
   const toastIdRef = useRef(0);
   const clientDocInputRef = useRef(null);
+  // -- ROOMS STATE --
+  const [roomsData, setRoomsData] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', description: '' });
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
+
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -387,6 +394,14 @@ export default function AdminDashboard() {
 
     fetchUsers();
   }, [activeNav, token, usersReload]);
+
+  // Load rooms when navigating to rooms page
+  useEffect(() => {
+    if (activeNav === "rooms") {
+      fetchRooms();
+    }
+  }, [activeNav]);
+
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleSidebar = () => {
@@ -1888,3 +1903,4 @@ export default function AdminDashboard() {
     </>
   );
 }
+
