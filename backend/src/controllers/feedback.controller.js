@@ -8,7 +8,7 @@ exports.createFeedback = async (req, res) => {
     const { booking_id, user_id, rating, comment } = req.body;
 
 
-    if (!booking_id || !user_id || rating === undefined || rating === null) {
+    if (!user_id || rating === undefined || rating === null) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -19,7 +19,7 @@ exports.createFeedback = async (req, res) => {
 
     const feedback = await prisma.feedback.create({
       data: {
-        booking_id,
+        booking_id: booking_id || null,
         user_id,
         rating: numericRating,
         comment,
@@ -47,10 +47,11 @@ exports.createFeedback = async (req, res) => {
 
 exports.getFeedbackByBooking = async (req, res) => {
   try {
-    const { bookingId } = req.params;
+    const bookingId = req.params.bookingId || req.query.bookingId;
+    const where = bookingId ? { booking_id: bookingId } : undefined;
 
     const feedbacks = await prisma.feedback.findMany({
-      where: { booking_id: bookingId },
+      where,
       include: {
         user: true, 
       },

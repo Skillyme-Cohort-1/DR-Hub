@@ -231,8 +231,8 @@ model Booking {
 model Feedback {
   id String @id @default(cuid())
 
-  booking_id String
-  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  booking_id String?
+  booking    Booking? @relation(fields: [booking_id], references: [id], onDelete: Cascade)
 
   user_id    String
   rating     Int
