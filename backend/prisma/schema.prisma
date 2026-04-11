@@ -29,46 +29,69 @@ enum DocumentStatus {
   DECLINED
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum BookingStatus {
+  PENDING // Created, awaiting payment confirmation
+  CONFIRMED // Payment completed via webhook, slot locked
+  CANCELLED // Cancelled by client or admin
+  COMPLETED // Session has successfully taken place
+  NO_SHOW // Client did not attend the session
+}
+
+enum TimeSlot {
+  MORNING // 10:00am – 1:00pm
+  AFTERNOON // 2:00pm – 5:00pm
+  EVENING // 5:00pm – 8:00pm
+}
+
 model User {
   id               String                   @id @default(cuid())
   name             String
   email            String                   @unique
-  phoneNumber      String?                  @unique
-  gender           Gender?
-  address          String?
-  city             String?
-  country          String?
-  occupation       String                   @default("Lawyer")
-  status           UserStatus               @default(INACTIVE)
   role             Role                     @default(MEMBER)
   passwordHash     String
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
-  resetTokens      PasswordResetToken[]
+  address          String?
+  city             String?
+  country          String?
+  gender           Gender?
+  phoneNumber      String?                  @unique
+  status           UserStatus               @default(INACTIVE)
+  occupation       String                   @default("Lawyer")
   activationTokens AccountActivationToken[]
+  feedbacks        Feedback[]
+  resetTokens      PasswordResetToken[]
   documents        UserDocument[]
+  bookings         Booking[]
+  payments         Payment[]
 }
 
 model PasswordResetToken {
-  id          String   @id @default(cuid())
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model AccountActivationToken {
-  id          String   @id @default(cuid())
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -95,7 +118,71 @@ model Room {
   is_active   Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  // This will connect to bookings later when David adds his model
-  // bookings Booking[]
+
+  bookings Booking[]
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  reference     String        @unique
+  date          DateTime
+  slot          TimeSlot
+  status        BookingStatus @default(PENDING)
+  amountCharged Int
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  // No paymentId here — Payment owns the relationship
+  // Prisma still allows: booking.payment via implicit back-relation
+  payment   Payment?
+  feedbacks Feedback[]
+
+  @@unique([roomId, date, slot])
+  @@index([userId])
+  @@index([roomId])
+  @@index([status])
+  @@index([date, slot])
+}
+
+model Feedback {
+  id String @id @default(cuid())
+
+  booking_id String
+  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  user_id    String
+  rating     Int
+  comment    String?
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([booking_id, user_id])
+  @@index([booking_id])
+  @@index([user_id])
+}
+
+model Payment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  amount           Int
+  currency         String        @default("KES")
+  status           PaymentStatus @default(PENDING)
+  paymentReference String?       @unique
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([bookingId])
 }
