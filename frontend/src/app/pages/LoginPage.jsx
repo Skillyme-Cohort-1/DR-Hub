@@ -18,7 +18,8 @@ export function LoginPage() {
   const onSubmit = async () => {
     // Replace with API call + token storage when backend is ready
     await new Promise((r) => setTimeout(r, 400));
-    navigate("/", { replace: true });
+    localStorage.setItem("isLoggedIn", "true");
+    navigate("/dashboard", { replace: true });
   };
 
   return (
