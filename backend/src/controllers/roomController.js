@@ -5,7 +5,7 @@ class RoomController {
   async getAllRooms(req, res) {
     try {
       // Check if user is admin from Paul's auth middleware
-      const includeInactive = req.user?.role === 'ADMIN'
+      const includeInactive = req.authUser?.role === 'ADMIN'
       const rooms = await roomService.getAllRooms(includeInactive)
       
       res.json({
@@ -33,7 +33,7 @@ class RoomController {
       }
       
       // Clients shouldn't see inactive rooms
-      if (!room.is_active && req.user?.role !== 'ADMIN') {
+      if (!room.is_active && req.authUser?.role !== 'ADMIN') {
         return res.status(403).json({
           success: false,
           message: 'Access denied'

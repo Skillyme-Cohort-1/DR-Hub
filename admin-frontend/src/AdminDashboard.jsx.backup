@@ -347,7 +347,6 @@ export default function AdminDashboard() {
   const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', description: '' });
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
-  const [roomsLoading, setRoomsLoading] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -616,19 +615,16 @@ export default function AdminDashboard() {
   };
 
     // ── ROOM FUNCTIONS ──
-   const fetchRooms = async () => {
-     setRoomsLoading(true);
-     try {
-       const response = await fetch("http://localhost:3000/api/rooms");
-       const data = await response.json();
-       if (data.success) {
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/rooms");
+      const data = await response.json();
+      if (data.success) {
         setRoomsData(data.data);
-       }
-     } catch (error) {
-       console.error("Error fetching rooms:", error);
-     }finally {
-      setRoomsLoading(false);
-     }
+      }
+    } catch (error) {
+      console.error("Error fetching rooms:", error);
+    }
   };
 
   const createRoom = async () => {
