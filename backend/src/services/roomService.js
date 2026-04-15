@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+const prisma = require('../lib/prisma');
 
 class RoomService {
   // Get all rooms (clients see only active rooms)

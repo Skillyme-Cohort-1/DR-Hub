@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
-const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
+const roomRoutes = require('./src/routes/roomRoutes');
 const paymentRoutes = require('./src/routes/paymentRoute');
 const app = express();
 
@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
-app.use('/api/rooms', roomRoutes);  // ← ADD THIS LINE
+app.use('/api/rooms', roomRoutes);
 app.use('/api/payments', paymentRoutes);
 
 app.use((error, req, res, next) => {
