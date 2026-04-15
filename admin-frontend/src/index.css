@@ -1,7 +1,6 @@
 @import "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "@fontsource-variable/geist";
+
 @custom-variant dark (&:is(.dark *));
 
 /* :root {
@@ -341,3 +340,4 @@ code {
     @apply font-sans;
     }
 }
+

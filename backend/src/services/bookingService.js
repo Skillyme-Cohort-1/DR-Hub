@@ -1,5 +1,5 @@
 const prisma      = require('../lib/prisma');
-const roomService = require('../../services/roomService');
+const roomService = require('./roomService');
 
 // Pricing in KES cents to avoid floating point arithmetic errors
 const PRICING = {

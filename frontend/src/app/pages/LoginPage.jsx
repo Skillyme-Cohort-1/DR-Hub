@@ -20,6 +20,7 @@ export function LoginPage() {
     await new Promise((r) => setTimeout(r, 400));
     localStorage.setItem("isLoggedIn", "true");
     navigate("/dashboard", { replace: true });
+    navigate("/", { replace: true });
   };
 
   return (

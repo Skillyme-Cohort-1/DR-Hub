@@ -6,8 +6,7 @@ class RoomService {
     const where = includeInactive ? {} : { is_active: true }
     
     return await prisma.room.findMany({
-      where,
-      orderBy: { name: 'asc' }
+      orderBy: { createdAt: 'desc' },
     })
   }
 
@@ -20,7 +19,7 @@ class RoomService {
 
   // Create new room (admin only)
   async createRoom(data) {
-    const { name, capacity, description, imageUrl } = data
+    const { name, capacity, description, cost, imageUrl } = data
     
     // Validate
     if (!name || !capacity) {
@@ -46,6 +45,7 @@ class RoomService {
         capacity: parseInt(capacity),
         description: description || null,
         imageUrl: imageUrl || null,
+        cost: cost || 0,
         is_active: true
       }
     })
