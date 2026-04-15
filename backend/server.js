@@ -6,6 +6,7 @@ const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
 const bookingRoutes = require('./src/routes/bookingRoutes');
+const feedbackRoutes = require('./src/routes/feedback.route');
 const paymentRoutes = require('./src/routes/paymentRoute');
 const app = express();
 
@@ -19,10 +20,11 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/users', userAuthRoutes);
-app.use('/api/documents', documentRoutes);
-app.use('/api/rooms', roomRoutes);  // ← ADD THIS LINE
+app.use('/api/documents', documentRoutes); // ← ADD THIS LINE
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/rooms', roomRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 app.use((error, req, res, next) => {
   console.error(error);

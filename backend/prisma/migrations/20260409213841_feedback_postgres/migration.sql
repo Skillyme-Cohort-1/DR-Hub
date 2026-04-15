@@ -1,0 +1,2 @@
+-- This migration was already applied in the database.
+-- Recreated to sync Prisma migration history.
