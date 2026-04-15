@@ -1,0 +1,1 @@
+STATUSES = ["Pending", "Cancelled", "Rejected", "Accepted", "Paid", "Complete"]
