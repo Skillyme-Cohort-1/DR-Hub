@@ -20,7 +20,6 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
-app.use('/api/feedback', feedbackRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/feedback', feedbackRoutes);
