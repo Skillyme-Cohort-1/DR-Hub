@@ -1,4 +1,4 @@
-const roomService = require('../services/roomService')
+const roomService = require("../services/roomService")
 
 class RoomController {
   // GET /api/rooms

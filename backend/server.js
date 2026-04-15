@@ -5,8 +5,6 @@ const path = require('path');
 const userAuthRoutes = require('./src/routes/userAuthRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const roomRoutes = require('./src/routes/roomRoutes');
-
-const roomRoutes = require('./routes/roomRoutes');  // ← ADD THIS LINE
 const bookingRoutes = require('./src/routes/bookingRoutes');
 const paymentRoutes = require('./src/routes/paymentRoute');
 const feedbackRoutes = require('./src/routes/feedback.route');
