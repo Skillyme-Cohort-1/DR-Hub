@@ -284,6 +284,16 @@ function mapDocumentStatus(apiStatus) {
   return "Pending";
 }
 
+function getDocumentPreviewUrl(doc, apiBaseUrl) {
+  if (!doc) return null;
+  if (doc.documentUrl) return doc.documentUrl;
+  const file = doc.documentFile;
+  if (!file) return null;
+  if (/^https?:\/\//i.test(file)) return file;
+  if (String(file).startsWith("/")) return `${apiBaseUrl}${file}`;
+  return null;
+}
+
 function Toast({ toasts }) {
   return (
     <div className="dh-toast-wrap">
@@ -322,6 +332,11 @@ export default function AdminDashboard() {
   const [editingUserId, setEditingUserId] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [documentFormName, setDocumentFormName] = useState("");
+  const [documentFormFile, setDocumentFormFile] = useState(null);
+  const [documentFormError, setDocumentFormError] = useState("");
+  const [documentFormSubmitting, setDocumentFormSubmitting] = useState(false);
   const [clientDocuments, setClientDocuments] = useState([]);
   const [clientDocumentsLoading, setClientDocumentsLoading] = useState(false);
   const [clientDocumentsError, setClientDocumentsError] = useState("");
@@ -433,40 +448,58 @@ export default function AdminDashboard() {
     loadClientDocuments(selectedClient.id);
   }, [activeNav, selectedClient?.id, token]);
 
-  const handleClientDocumentUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!selectedClient || files.length === 0 || !token) return;
+  const openDocumentModal = () => {
+    setDocumentFormName("");
+    setDocumentFormFile(null);
+    setDocumentFormError("");
+    setShowDocumentModal(true);
+  };
+
+  const submitDocumentForm = async () => {
+    if (!selectedClient || !token) {
+      setDocumentFormError("Client or auth session missing.");
+      return;
+    }
+    if (!documentFormName.trim()) {
+      setDocumentFormError("Document name is required.");
+      return;
+    }
+    if (!documentFormFile) {
+      setDocumentFormError("Please choose a file.");
+      return;
+    }
+
+    setDocumentFormSubmitting(true);
+    setDocumentFormError("");
 
     try {
-      const createCalls = files.map((file) =>
-        fetch(`${API_BASE_URL}/api/documents`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            userId: selectedClient.id,
-            documentName: file.name,
-            // backend currently stores string path/url, so we keep filename placeholder
-            documentFile: file.name,
-            status: "PENDING",
-          }),
-        })
-      );
+      const formData = new FormData();
+      formData.append("documentName", documentFormName.trim());
+      formData.append("userId", selectedClient.id);
+      formData.append("status", "PENDING");
+      formData.append("document", documentFormFile);
 
-      const results = await Promise.all(createCalls);
-      const failures = results.filter((r) => !r.ok).length;
-      if (failures > 0) {
-        addToast(`${files.length - failures} uploaded, ${failures} failed`, "orange", "!");
-      } else {
-        addToast(`${files.length} document(s) uploaded`, "green", "📄");
+      const response = await fetch(`${API_BASE_URL}/api/documents`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setDocumentFormError(data.message || "Failed to upload document.");
+        return;
       }
+
+      addToast("Document uploaded", "green", "📄");
+      setShowDocumentModal(false);
       await loadClientDocuments(selectedClient.id);
     } catch {
-      setClientDocumentsError("Could not upload documents.");
+      setDocumentFormError("Could not upload document.");
     } finally {
-      event.target.value = "";
+      setDocumentFormSubmitting(false);
     }
   };
 
@@ -1364,49 +1397,30 @@ export default function AdminDashboard() {
                 <div className="dh-panel">
                   <div className="dh-panel-hd">
                     <div className="dh-panel-title">Documents</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        ref={clientDocInputRef}
-                        type="file"
-                        multiple
-                        style={{ display: "none" }}
-                        onChange={handleClientDocumentUpload}
-                      />
-                      <button
-                        className="dh-btn-primary"
-                        onClick={() => clientDocInputRef.current?.click()}
-                        disabled={!selectedClient}
-                      >
-                        Upload Document
-                      </button>
-                    </div>
+                    <button className="dh-btn-primary" onClick={openDocumentModal} disabled={!selectedClient}>
+                      Upload Document
+                    </button>
                   </div>
                   <div className="dh-table-wrap">
                     <table className="dh-table">
                       <thead>
-                        <tr><th>ID</th><th>Document</th><th>Type</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr>
+                        <tr><th>#</th><th>Document</th><th>Created</th><th>Actions</th></tr>
                       </thead>
                       <tbody>
                         {clientDocumentsLoading && (
-                          <tr><td colSpan={6}><div className="dh-empty">Loading documents...</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">Loading documents...</div></td></tr>
                         )}
                         {!clientDocumentsLoading && clientDocumentsError && (
-                          <tr><td colSpan={6}><div className="dh-empty">{clientDocumentsError}</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">{clientDocumentsError}</div></td></tr>
                         )}
                         {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.length === 0 && (
-                          <tr><td colSpan={6}><div className="dh-empty">No documents found</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">No documents found</div></td></tr>
                         )}
-                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.map((doc) => (
+                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.map((doc, index) => (
                           <tr key={doc.id}>
-                            <td style={{ color: "#888", fontSize: 11 }}>{doc.id}</td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{index + 1}</td>
                             <td>{doc.documentName}</td>
-                            <td>{doc.documentFile || "Uploaded File"}</td>
                             <td style={{ color: "#888", fontSize: 11 }}>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "-"}</td>
-                            <td>
-                              <span className={`dh-status ${String(doc.status).toUpperCase() === "APPROVED" ? "s-confirmed" : String(doc.status).toUpperCase() === "DECLINED" ? "s-rejected" : "s-pending"}`}>
-                                {mapDocumentStatus(doc.status)}
-                              </span>
-                            </td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <div className="dh-actions">
                                 <button
@@ -2077,9 +2091,15 @@ export default function AdminDashboard() {
         )}
 
         {/* ── DOCUMENT PREVIEW MODAL ── */}
-        {previewDocument && (
+        {previewDocument && (() => {
+          const previewUrl = getDocumentPreviewUrl(previewDocument, API_BASE_URL);
+          return (
           <div className="dh-modal-overlay" onClick={() => setPreviewDocument(null)}>
-            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="dh-modal"
+              style={{ maxWidth: "min(920px, 96vw)", width: "100%" }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="dh-modal-hd">
                 <div className="dh-modal-title">Document Preview</div>
                 <button className="dh-modal-close" onClick={() => setPreviewDocument(null)}>✕</button>
@@ -2089,23 +2109,78 @@ export default function AdminDashboard() {
                 <div><strong>Status:</strong> {mapDocumentStatus(previewDocument.status)}</div>
                 <div><strong>Uploaded:</strong> {previewDocument.createdAt ? new Date(previewDocument.createdAt).toLocaleString() : "-"}</div>
                 <div><strong>Reference:</strong> {previewDocument.documentFile || "-"}</div>
-                {String(previewDocument.documentFile || "").startsWith("http") ? (
-                  <a
-                    href={previewDocument.documentFile}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="dh-panel-link"
-                  >
-                    Open document in new tab
-                  </a>
+                {previewUrl ? (
+                  <>
+                    <p style={{ margin: "8px 0 0" }}>
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="dh-panel-link"
+                      >
+                        Preview
+                      </a>
+                    </p>
+                    <iframe
+                      title={previewDocument.documentName || "Document preview"}
+                      src={previewUrl}
+                      width="100%"
+                      height={600}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        marginTop: 12,
+                        background: "#111",
+                      }}
+                    />
+                  </>
                 ) : (
                   <div style={{ color: "#888", fontSize: 12 }}>
-                    File content preview is not available yet. This document currently stores a filename reference.
+                    No preview URL is available for this document.
                   </div>
                 )}
               </div>
               <div className="dh-modal-ft">
                 <button className="dh-btn-cancel" onClick={() => setPreviewDocument(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* ── DOCUMENT UPLOAD MODAL ── */}
+        {showDocumentModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowDocumentModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Upload Document</div>
+                <button className="dh-modal-close" onClick={() => setShowDocumentModal(false)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-group">
+                  <label>Document Name *</label>
+                  <input
+                    value={documentFormName}
+                    onChange={(e) => setDocumentFormName(e.target.value)}
+                    placeholder="e.g. National ID Copy"
+                  />
+                </div>
+                <div className="dh-form-group">
+                  <label>File *</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setDocumentFormFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                {documentFormError && (
+                  <div style={{ color: "#ffb4b4", fontSize: 12 }}>{documentFormError}</div>
+                )}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setShowDocumentModal(false)}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitDocumentForm} disabled={documentFormSubmitting}>
+                  {documentFormSubmitting ? "Uploading..." : "Upload"}
+                </button>
               </div>
             </div>
           </div>
