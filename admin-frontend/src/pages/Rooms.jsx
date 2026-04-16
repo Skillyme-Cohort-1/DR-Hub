@@ -29,7 +29,7 @@ export default function Rooms() {
   const createRoom = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/admin/rooms`, {
+      const response = await fetch(`${API_URL}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

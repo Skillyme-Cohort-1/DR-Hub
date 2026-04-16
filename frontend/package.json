@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-<<<<<<< HEAD
-=======
     "@fontsource-variable/geist": "^5.2.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/vite": "^4.2.2",
@@ -19,7 +17,6 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
     "radix-ui": "^1.4.3",
->>>>>>> 006d165c34ee3c88bd1c6cb0d8afdd1ed173849e
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.72.1",
@@ -32,13 +29,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-<<<<<<< HEAD
-=======
-    "@tailwindcss/vite": "^4.1.12",
->>>>>>> 006d165c34ee3c88bd1c6cb0d8afdd1ed173849e
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
