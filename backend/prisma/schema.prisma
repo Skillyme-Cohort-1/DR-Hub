@@ -7,48 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  MEMBER
-}
-
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum DocumentStatus {
-  APPROVED
-  PENDING
-  DECLINED
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-}
-
-enum BookingStatus {
-  PENDING // Created, awaiting payment confirmation
-  CONFIRMED // Payment completed via webhook, slot locked
-  CANCELLED // Cancelled by client or admin
-  COMPLETED // Session has successfully taken place
-  NO_SHOW // Client did not attend the session
-}
-
-enum TimeSlot {
-  MORNING // 10:00am – 1:00pm
-  AFTERNOON // 2:00pm – 5:00pm
-  EVENING // 5:00pm – 8:00pm
-}
-
 model User {
   id               String                   @id @default(cuid())
   name             String
@@ -65,11 +23,11 @@ model User {
   status           UserStatus               @default(INACTIVE)
   occupation       String                   @default("Lawyer")
   activationTokens AccountActivationToken[]
-  feedbacks        Feedback[]
   resetTokens      PasswordResetToken[]
   documents        UserDocument[]
   bookings         Booking[]
   payments         Payment[]
+  feedbacks        Feedback[]
 }
 
 model PasswordResetToken {
@@ -110,17 +68,30 @@ model UserDocument {
 }
 
 model Room {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String    @id @default(cuid())
+  name        String    @unique
   capacity    Int
+  cost        Int @default(0)
   description String?
   imageUrl    String?
-  is_active   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  bookings Booking[]
+  is_active   Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    Booking[]
+  slots       BookSlot[]
 }
+
+model BookSlot {
+  id          String    @id @default(cuid())
+  title        String    @unique
+  booked     Boolean @default(false)
+  
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
 
 model Booking {
   id            String        @id @default(cuid())
@@ -139,8 +110,6 @@ model Booking {
   roomId String
   room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
 
-  // No paymentId here — Payment owns the relationship
-  // Prisma still allows: booking.payment via implicit back-relation
   payment   Payment?
   feedbacks Feedback[]
 
@@ -152,16 +121,15 @@ model Booking {
 }
 
 model Feedback {
-  id String @id @default(cuid())
-
+  id         String   @id @default(cuid())
   booking_id String?
-  booking    Booking? @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-
   user_id    String
   rating     Int
   comment    String?
   created_at DateTime @default(now())
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  booking Booking? @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([booking_id, user_id])
   @@index([booking_id])
@@ -169,13 +137,9 @@ model Feedback {
 }
 
 model Payment {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  bookingId String  @unique
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
+  id               String        @id @default(cuid())
+  userId           String
+  bookingId        String        @unique
   amount           Int
   currency         String        @default("KES")
   status           PaymentStatus @default(PENDING)
@@ -183,6 +147,51 @@ model Payment {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([bookingId])
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DocumentStatus {
+  APPROVED
+  PENDING
+  DECLINED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum TimeSlot {
+  MORNING
+  AFTERNOON
+  EVENING
 }

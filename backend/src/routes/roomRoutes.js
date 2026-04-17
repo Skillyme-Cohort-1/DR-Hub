@@ -5,11 +5,11 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 // Public routes (anyone can view rooms)
 router.get('/', roomController.getAllRooms);
-router.get('/:id', roomController.getRoomById);
+//router.get('/:id', roomController.getRoomById);
 
 // Admin only routes (requireAuth + requireAdmin)
-router.post('/admin/rooms', requireAuth, requireAdmin, roomController.createRoom);
-router.put('/admin/rooms/:id', requireAuth, requireAdmin, roomController.updateRoom);
-router.delete('/admin/rooms/:id', requireAuth, requireAdmin, roomController.deleteRoom);
+router.post('/', requireAuth, requireAdmin, roomController.createRoom);
+router.put('/:id', requireAuth, requireAdmin, roomController.updateRoom);
+router.delete('/:id', requireAuth, requireAdmin, roomController.deleteRoom);
 
 module.exports = router;

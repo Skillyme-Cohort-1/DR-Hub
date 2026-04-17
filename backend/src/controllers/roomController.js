@@ -1,12 +1,11 @@
-const roomService = require('../services/roomService')
+const roomService = require("../services/roomService")
 
 class RoomController {
   // GET /api/rooms
   async getAllRooms(req, res) {
     try {
       // Check if user is admin from Paul's auth middleware
-      const includeInactive = req.authUser?.role === 'ADMIN'
-      const rooms = await roomService.getAllRooms(includeInactive)
+      const rooms = await roomService.getAllRooms()
       
       res.json({
         success: true,

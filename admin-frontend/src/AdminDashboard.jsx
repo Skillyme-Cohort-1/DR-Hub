@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "./config/api";
 import { useAuth } from "./context/AuthContext.jsx";
-import Rooms from './pages/Rooms';
 
 const SIDEBAR_BREAKPOINT = 960;
 
@@ -210,8 +209,9 @@ const css = `
   .dh-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .dh-form-group { display: flex; flex-direction: column; gap: 5px; }
   .dh-form-group label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #888; font-weight: 600; }
-  .dh-form-group input, .dh-form-group select { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #F0EDE8; padding: 10px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; width: 100%; }
-  .dh-form-group input:focus, .dh-form-group select:focus { border-color: #F07B2B; }
+  .dh-form-group input, .dh-form-group select, .dh-form-group textarea { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #F0EDE8; padding: 10px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; width: 100%; }
+  .dh-form-group input:focus, .dh-form-group select:focus, .dh-form-group textarea:focus { border-color: #F07B2B; }
+  .dh-form-group textarea { resize: vertical; min-height: 80px; }
   .dh-form-group select option { background: #1E1E1E; }
   .dh-modal-ft { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; gap: 10px; justify-content: flex-end; }
   .dh-btn-cancel { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #888; padding: 9px 18px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
@@ -284,6 +284,16 @@ function mapDocumentStatus(apiStatus) {
   return "Pending";
 }
 
+function getDocumentPreviewUrl(doc, apiBaseUrl) {
+  if (!doc) return null;
+  if (doc.documentUrl) return doc.documentUrl;
+  const file = doc.documentFile;
+  if (!file) return null;
+  if (/^https?:\/\//i.test(file)) return file;
+  if (String(file).startsWith("/")) return `${apiBaseUrl}${file}`;
+  return null;
+}
+
 function Toast({ toasts }) {
   return (
     <div className="dh-toast-wrap">
@@ -322,6 +332,11 @@ export default function AdminDashboard() {
   const [editingUserId, setEditingUserId] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [documentFormName, setDocumentFormName] = useState("");
+  const [documentFormFile, setDocumentFormFile] = useState(null);
+  const [documentFormError, setDocumentFormError] = useState("");
+  const [documentFormSubmitting, setDocumentFormSubmitting] = useState(false);
   const [clientDocuments, setClientDocuments] = useState([]);
   const [clientDocumentsLoading, setClientDocumentsLoading] = useState(false);
   const [clientDocumentsError, setClientDocumentsError] = useState("");
@@ -348,6 +363,10 @@ export default function AdminDashboard() {
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsSubmitting, setRoomsSubmitting] = useState(false);
+  const [roomFormError, setRoomFormError] = useState("");
+  const [roomSearch, setRoomSearch] = useState("");
+  const [showRoomModal, setShowRoomModal] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -395,6 +414,11 @@ export default function AdminDashboard() {
     fetchUsers();
   }, [activeNav, token, usersReload]);
 
+  useEffect(() => {
+    if (activeNav !== "rooms" || roomsData.length > 0) return;
+    fetchRooms();
+  }, [activeNav, roomsData.length]);
+
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleSidebar = () => {
     if (isMobile) setMobileMenuOpen((o) => !o);
@@ -432,40 +456,58 @@ export default function AdminDashboard() {
     loadClientDocuments(selectedClient.id);
   }, [activeNav, selectedClient?.id, token]);
 
-  const handleClientDocumentUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!selectedClient || files.length === 0 || !token) return;
+  const openDocumentModal = () => {
+    setDocumentFormName("");
+    setDocumentFormFile(null);
+    setDocumentFormError("");
+    setShowDocumentModal(true);
+  };
+
+  const submitDocumentForm = async () => {
+    if (!selectedClient || !token) {
+      setDocumentFormError("Client or auth session missing.");
+      return;
+    }
+    if (!documentFormName.trim()) {
+      setDocumentFormError("Document name is required.");
+      return;
+    }
+    if (!documentFormFile) {
+      setDocumentFormError("Please choose a file.");
+      return;
+    }
+
+    setDocumentFormSubmitting(true);
+    setDocumentFormError("");
 
     try {
-      const createCalls = files.map((file) =>
-        fetch(`${API_BASE_URL}/api/documents`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            userId: selectedClient.id,
-            documentName: file.name,
-            // backend currently stores string path/url, so we keep filename placeholder
-            documentFile: file.name,
-            status: "PENDING",
-          }),
-        })
-      );
+      const formData = new FormData();
+      formData.append("documentName", documentFormName.trim());
+      formData.append("userId", selectedClient.id);
+      formData.append("status", "PENDING");
+      formData.append("document", documentFormFile);
 
-      const results = await Promise.all(createCalls);
-      const failures = results.filter((r) => !r.ok).length;
-      if (failures > 0) {
-        addToast(`${files.length - failures} uploaded, ${failures} failed`, "orange", "!");
-      } else {
-        addToast(`${files.length} document(s) uploaded`, "green", "📄");
+      const response = await fetch(`${API_BASE_URL}/api/documents`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setDocumentFormError(data.message || "Failed to upload document.");
+        return;
       }
+
+      addToast("Document uploaded", "green", "📄");
+      setShowDocumentModal(false);
       await loadClientDocuments(selectedClient.id);
     } catch {
-      setClientDocumentsError("Could not upload documents.");
+      setDocumentFormError("Could not upload document.");
     } finally {
-      event.target.value = "";
+      setDocumentFormSubmitting(false);
     }
   };
 
@@ -632,10 +674,12 @@ export default function AdminDashboard() {
   };
 
   const createRoom = async () => {
-    if (!newRoomData.name || !newRoomData.capacity) {
-      alert("Name and capacity are required");
+    if (!newRoomData.name.trim() || !newRoomData.capacity) {
+      setRoomFormError("Room name and capacity are required.");
       return;
     }
+    setRoomFormError("");
+    setRoomsSubmitting(true);
     try {
       const response = await fetch("http://localhost:3000/api/rooms/admin/rooms", {
         method: "POST",
@@ -648,18 +692,27 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (data.success) {
-        alert("Room created!");
+        addToast("Room created successfully", "green", "✓");
         setNewRoomData({ name: '', capacity: '', description: '' });
+        setShowRoomModal(false);
         fetchRooms();
       } else {
-        alert(data.message);
+        setRoomFormError(data.message || "Failed to create room.");
       }
-    } catch (error) {
-      alert("Error creating room");
+    } catch {
+      setRoomFormError("Error creating room.");
+    } finally {
+      setRoomsSubmitting(false);
     }
   };
 
   const updateRoom = async () => {
+    if (!editRoomData.name.trim() || !editRoomData.capacity) {
+      setRoomFormError("Room name and capacity are required.");
+      return;
+    }
+    setRoomFormError("");
+    setRoomsSubmitting(true);
     try {
       const response = await fetch(`http://localhost:3000/api/rooms/admin/rooms/${editingRoomId}`, {
         method: "PUT",
@@ -672,15 +725,18 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (data.success) {
-        alert("Room updated!");
+        addToast("Room updated successfully", "green", "✓");
         setEditingRoomId(null);
         setEditRoomData({ name: '', capacity: '', description: '' });
+        setShowRoomModal(false);
         fetchRooms();
       } else {
-        alert(data.message);
+        setRoomFormError(data.message || "Failed to update room.");
       }
-    } catch (error) {
-      alert("Error updating room");
+    } catch {
+      setRoomFormError("Error updating room.");
+    } finally {
+      setRoomsSubmitting(false);
     }
   };
 
@@ -692,23 +748,32 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (data.success) {
-        alert("Room deleted!");
+        addToast("Room deleted", "green", "✓");
         fetchRooms();
       } else {
-        alert(data.message);
+        addToast(data.message || "Failed to delete room", "red", "✗");
       }
-    } catch (error) {
-      alert("Error deleting room");
+    } catch {
+      addToast("Error deleting room", "red", "✗");
     }
+  };
+
+  const openCreateRoomModal = () => {
+    setEditingRoomId(null);
+    setRoomFormError("");
+    setNewRoomData({ name: '', capacity: '', description: '' });
+    setShowRoomModal(true);
   };
 
   const startEditRoom = (room) => {
     setEditingRoomId(room.id);
+    setRoomFormError("");
     setEditRoomData({
       name: room.name,
       capacity: room.capacity,
       description: room.description || ''
     });
+    setShowRoomModal(true);
   };
 
   // ── TOAST ──
@@ -1336,49 +1401,30 @@ export default function AdminDashboard() {
                 <div className="dh-panel">
                   <div className="dh-panel-hd">
                     <div className="dh-panel-title">Documents</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        ref={clientDocInputRef}
-                        type="file"
-                        multiple
-                        style={{ display: "none" }}
-                        onChange={handleClientDocumentUpload}
-                      />
-                      <button
-                        className="dh-btn-primary"
-                        onClick={() => clientDocInputRef.current?.click()}
-                        disabled={!selectedClient}
-                      >
-                        Upload Document
-                      </button>
-                    </div>
+                    <button className="dh-btn-primary" onClick={openDocumentModal} disabled={!selectedClient}>
+                      Upload Document
+                    </button>
                   </div>
                   <div className="dh-table-wrap">
                     <table className="dh-table">
                       <thead>
-                        <tr><th>ID</th><th>Document</th><th>Type</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr>
+                        <tr><th>#</th><th>Document</th><th>Created</th><th>Actions</th></tr>
                       </thead>
                       <tbody>
                         {clientDocumentsLoading && (
-                          <tr><td colSpan={6}><div className="dh-empty">Loading documents...</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">Loading documents...</div></td></tr>
                         )}
                         {!clientDocumentsLoading && clientDocumentsError && (
-                          <tr><td colSpan={6}><div className="dh-empty">{clientDocumentsError}</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">{clientDocumentsError}</div></td></tr>
                         )}
                         {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.length === 0 && (
-                          <tr><td colSpan={6}><div className="dh-empty">No documents found</div></td></tr>
+                          <tr><td colSpan={4}><div className="dh-empty">No documents found</div></td></tr>
                         )}
-                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.map((doc) => (
+                        {!clientDocumentsLoading && !clientDocumentsError && clientDocuments.map((doc, index) => (
                           <tr key={doc.id}>
-                            <td style={{ color: "#888", fontSize: 11 }}>{doc.id}</td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{index + 1}</td>
                             <td>{doc.documentName}</td>
-                            <td>{doc.documentFile || "Uploaded File"}</td>
                             <td style={{ color: "#888", fontSize: 11 }}>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "-"}</td>
-                            <td>
-                              <span className={`dh-status ${String(doc.status).toUpperCase() === "APPROVED" ? "s-confirmed" : String(doc.status).toUpperCase() === "DECLINED" ? "s-rejected" : "s-pending"}`}>
-                                {mapDocumentStatus(doc.status)}
-                              </span>
-                            </td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <div className="dh-actions">
                                 <button
@@ -1523,94 +1569,87 @@ export default function AdminDashboard() {
         <div className="dh-panel-title">Room Management</div>
         <div className="dh-panel-sub">Manage office spaces and meeting rooms</div>
       </div>
-      <button className="dh-btn-primary" onClick={fetchRooms}>🔄 Refresh</button>
-    </div>
-    
-    {/* Add Room Form */}
-    <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-      <h3 style={{ fontSize: '14px', marginBottom: '12px' }}>
-        {editingRoomId ? 'Edit Room' : 'Add New Room'}
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: '12px' }}>
-        <input
-          type="text"
-          placeholder="Room Name"
-          className="dh-search"
-          value={editingRoomId ? editRoomData.name : newRoomData.name}
-          onChange={(e) => editingRoomId 
-            ? setEditRoomData({ ...editRoomData, name: e.target.value })
-            : setNewRoomData({ ...newRoomData, name: e.target.value })
-          }
-        />
-        <input
-          type="number"
-          placeholder="Capacity"
-          className="dh-search"
-          value={editingRoomId ? editRoomData.capacity : newRoomData.capacity}
-          onChange={(e) => editingRoomId
-            ? setEditRoomData({ ...editRoomData, capacity: e.target.value })
-            : setNewRoomData({ ...newRoomData, capacity: e.target.value })
-          }
-        />
-        <input
-          type="text"
-          placeholder="Description"
-          className="dh-search"
-          value={editingRoomId ? editRoomData.description : newRoomData.description}
-          onChange={(e) => editingRoomId
-            ? setEditRoomData({ ...editRoomData, description: e.target.value })
-            : setNewRoomData({ ...newRoomData, description: e.target.value })
-          }
-        />
-        <button
-          className="dh-btn-primary"
-          onClick={editingRoomId ? updateRoom : createRoom}
-        >
-          {editingRoomId ? 'Update Room' : 'Create Room'}
-        </button>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button className="dh-btn-primary" onClick={openCreateRoomModal}>+ Add Room</button>
+        <button className="dh-btn-primary" onClick={fetchRooms}>🔄 Refresh</button>
       </div>
-      {editingRoomId && (
-        <button
-          className="dh-btn-cancel"
-          style={{ marginTop: '10px' }}
-          onClick={() => {
-            setEditingRoomId(null);
-            setEditRoomData({ name: '', capacity: '', description: '' });
-          }}
-        >
-          Cancel Edit
-        </button>
-      )}
     </div>
 
-    {/* Rooms Grid */}
-    <div className="dh-leads-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-      {roomsLoading && <div className="dh-empty">Loading rooms...</div>}
-      {!roomsLoading && roomsData.length === 0 && (
-        <div className="dh-empty">No rooms found. Create your first room!</div>
-      )}
-      {roomsData.map((room) => (
-        <div key={room.id} className="dh-panel" style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#F07B2B' }}>{room.name}</h3>
-            <span className={`dh-status ${room.is_active ? 's-confirmed' : 's-rejected'}`}>
-              {room.is_active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-          <p style={{ marginTop: '8px', color: '#888' }}>👥 Capacity: {room.capacity} people</p>
-          <p style={{ marginTop: '4px', color: '#666', fontSize: '12px' }}>{room.description || 'No description'}</p>
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-            <button className="dh-action-btn btn-view" onClick={() => startEditRoom(room)}>✏️ Edit</button>
-            <button className="dh-action-btn btn-reject" onClick={() => deleteRoom(room.id)}>🗑️ Delete</button>
-          </div>
-        </div>
-      ))}
+    {/* Rooms Table */}
+    <div style={{ padding: "14px 20px 0" }}>
+      <input
+        className="dh-search"
+        placeholder="Search room by name or description..."
+        value={roomSearch}
+        onChange={(e) => setRoomSearch(e.target.value)}
+      />
+    </div>
+    <div className="dh-table-wrap">
+      <table className="dh-table">
+        <thead>
+          <tr>
+            <th>Room</th>
+            <th>Capacity</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {roomsLoading && (
+            <tr>
+              <td colSpan={5}>
+                <div className="dh-empty">Loading rooms...</div>
+              </td>
+            </tr>
+          )}
+          {!roomsLoading && roomsData
+            .filter((room) => {
+              const query = roomSearch.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                String(room.name || "").toLowerCase().includes(query) ||
+                String(room.description || "").toLowerCase().includes(query)
+              );
+            }).length === 0 && (
+            <tr>
+              <td colSpan={5}>
+                <div className="dh-empty">No rooms found. Try another search or add a new room.</div>
+              </td>
+            </tr>
+          )}
+          {!roomsLoading && roomsData
+            .filter((room) => {
+              const query = roomSearch.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                String(room.name || "").toLowerCase().includes(query) ||
+                String(room.description || "").toLowerCase().includes(query)
+              );
+            })
+            .map((room) => (
+              <tr key={room.id}>
+                <td style={{ fontWeight: 600 }}>{room.name || "-"}</td>
+                <td>{room.capacity || "-"}</td>
+                <td>{room.description || "No description"}</td>
+                <td>
+                  <span className={`dh-status ${room.is_active ? 's-confirmed' : 's-rejected'}`}>
+                    {room.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="dh-action-btn btn-view" onClick={() => startEditRoom(room)}>Edit</button>
+                    <button className="dh-action-btn btn-reject" onClick={() => deleteRoom(room.id)}>Delete</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
     </div>
   </div>
 )}
-
-            {/* ── ROOMS ── */}
-            {activeNav === "rooms" && <Rooms />}
 
             {/* ── LEADS ── */}
             {activeNav === "leads" && (
@@ -2049,9 +2088,15 @@ export default function AdminDashboard() {
         )}
 
         {/* ── DOCUMENT PREVIEW MODAL ── */}
-        {previewDocument && (
+        {previewDocument && (() => {
+          const previewUrl = getDocumentPreviewUrl(previewDocument, API_BASE_URL);
+          return (
           <div className="dh-modal-overlay" onClick={() => setPreviewDocument(null)}>
-            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="dh-modal"
+              style={{ maxWidth: "min(920px, 96vw)", width: "100%" }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="dh-modal-hd">
                 <div className="dh-modal-title">Document Preview</div>
                 <button className="dh-modal-close" onClick={() => setPreviewDocument(null)}>✕</button>
@@ -2061,24 +2106,162 @@ export default function AdminDashboard() {
                 <div><strong>Status:</strong> {mapDocumentStatus(previewDocument.status)}</div>
                 <div><strong>Uploaded:</strong> {previewDocument.createdAt ? new Date(previewDocument.createdAt).toLocaleString() : "-"}</div>
                 <div><strong>Reference:</strong> {previewDocument.documentFile || "-"}</div>
-                {String(previewDocument.documentFile || "").startsWith("http") ? (
-                  <a
-                    href={previewDocument.documentFile}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="dh-panel-link"
-                  >
-                    Open document in new tab
-                  </a>
+                {previewUrl ? (
+                  <>
+                    <p style={{ margin: "8px 0 0" }}>
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="dh-panel-link"
+                      >
+                        Preview
+                      </a>
+                    </p>
+                    <iframe
+                      title={previewDocument.documentName || "Document preview"}
+                      src={previewUrl}
+                      width="100%"
+                      height={600}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        marginTop: 12,
+                        background: "#111",
+                      }}
+                    />
+                  </>
                 ) : (
                   <div style={{ color: "#888", fontSize: 12 }}>
-                    File content preview is not available yet. This document currently stores a filename reference.
+                    No preview URL is available for this document.
                   </div>
                 )}
               </div>
               <div className="dh-modal-ft">
                 <button className="dh-btn-cancel" onClick={() => setPreviewDocument(null)}>Close</button>
               </div>
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* ── DOCUMENT UPLOAD MODAL ── */}
+        {showDocumentModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowDocumentModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Upload Document</div>
+                <button className="dh-modal-close" onClick={() => setShowDocumentModal(false)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-group">
+                  <label>Document Name *</label>
+                  <input
+                    value={documentFormName}
+                    onChange={(e) => setDocumentFormName(e.target.value)}
+                    placeholder="e.g. National ID Copy"
+                  />
+                </div>
+                <div className="dh-form-group">
+                  <label>File *</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setDocumentFormFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                {documentFormError && (
+                  <div style={{ color: "#ffb4b4", fontSize: 12 }}>{documentFormError}</div>
+                )}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setShowDocumentModal(false)}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitDocumentForm} disabled={documentFormSubmitting}>
+                  {documentFormSubmitting ? "Uploading..." : "Upload"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ROOM MODAL ── */}
+        {showRoomModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowRoomModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">{editingRoomId ? 'Edit Room' : 'Add New Room'}</div>
+                <button className="dh-modal-close" onClick={() => setShowRoomModal(false)}>✕</button>
+              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (roomsSubmitting) return;
+                  editingRoomId ? updateRoom() : createRoom();
+                }}
+              >
+                <div className="dh-modal-body">
+                  <div className="dh-form-group">
+                    <label>Room Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Private Office, Boardroom"
+                      value={editingRoomId ? editRoomData.name : newRoomData.name}
+                      onChange={(e) => editingRoomId 
+                        ? setEditRoomData({ ...editRoomData, name: e.target.value })
+                        : setNewRoomData({ ...newRoomData, name: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Capacity *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Number of people"
+                      value={editingRoomId ? editRoomData.capacity : newRoomData.capacity}
+                      onChange={(e) => editingRoomId
+                        ? setEditRoomData({ ...editRoomData, capacity: e.target.value })
+                        : setNewRoomData({ ...newRoomData, capacity: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Description</label>
+                    <textarea
+                      placeholder="Brief description of the room..."
+                      rows={3}
+                      value={editingRoomId ? editRoomData.description : newRoomData.description}
+                      onChange={(e) => editingRoomId
+                        ? setEditRoomData({ ...editRoomData, description: e.target.value })
+                        : setNewRoomData({ ...newRoomData, description: e.target.value })
+                      }
+                    />
+                  </div>
+                  {roomFormError && (
+                    <div style={{ color: "#ffb4b4", fontSize: 12 }}>{roomFormError}</div>
+                  )}
+                </div>
+                <div className="dh-modal-ft">
+                  <button 
+                    type="button" 
+                    className="dh-btn-cancel" 
+                    onClick={() => {
+                      setShowRoomModal(false);
+                      setRoomFormError("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="dh-btn-primary" 
+                    disabled={roomsSubmitting}
+                  >
+                    {roomsSubmitting ? "Saving..." : editingRoomId ? 'Save Changes' : 'Create Room'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
