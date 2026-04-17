@@ -15,25 +15,17 @@ const {
 
 const router = express.Router();
 
-// Check slot availability
-router.get('/availability', requireAuth, checkAvailability);
+// Public routes — no auth required
+router.get('/availability', checkAvailability);
+router.post('/', createBooking);
 
-// Create a new booking
-router.post('/', requireAuth, createBooking);
-
-// Get own bookings — must come before /:id
+// Authenticated routes
 router.get('/my-bookings', requireAuth, getMyBookings);
-
-// Get single booking by ID
 router.get('/:id', requireAuth, getBookingById);
-
-// Cancel a booking
 router.patch('/:id/cancel', requireAuth, cancelBooking);
 
-// Get all bookings with optional filters
+// Admin only routes
 router.get('/', requireAuth, requireAdmin, getAllBookings);
-
-// Update booking status
 router.patch('/:id/status', requireAuth, requireAdmin, updateBookingStatus);
 
 module.exports = router;

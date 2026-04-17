@@ -7,7 +7,7 @@ const {
 } = require('../validators/bookingValidator');
 
 function isAdmin(authUser) {
-    return authUser && authUser.role === 'ADMIN';  // fixed: == → ===
+    return authUser && authUser.role === 'ADMIN';
 }
 
 // Check availability
@@ -43,9 +43,7 @@ async function createBooking(req, res, next) {
             return res.status(400).json({ message: 'Validation failed.', errors });
         }
 
-        const userId = req.authUser.id;
-
-        const booking = await bookingService.createBooking({ ...data, userId });
+        const booking = await bookingService.createBooking(data);
 
         return res.status(201).json({
             message: 'Booking created successfully.',
@@ -55,14 +53,20 @@ async function createBooking(req, res, next) {
         if (error.message === 'ROOM_NOT_FOUND') {
             return res.status(404).json({ message: 'Room not found.' });
         }
-        if (error.message === 'SLOT_UNAVAILABLE') {
-            return res.status(409).json({ message: 'This slot is already booked.' });
-        }
         if (error.message === 'ROOM_INACTIVE') {
             return res.status(400).json({ message: 'This room is no longer available for booking.' });
         }
+        if (error.message === 'SLOT_UNAVAILABLE') {
+            return res.status(409).json({ message: 'This slot is already booked.' });
+        }
+        if (error.message === 'USER_NOT_ACTIVE') {
+            return res.status(403).json({ message: 'Your account is not active. Please contact support.' });
+        }
         if (error.message === 'NO_APPROVED_DOCUMENT') {
             return res.status(403).json({ message: 'You must have an approved qualification document before booking.' });
+        }
+        if (error.message === 'ROOM_COST_NOT_SET') {
+            return res.status(400).json({ message: 'This room does not have a price set. Please contact support.' });
         }
         return next(error);
     }
