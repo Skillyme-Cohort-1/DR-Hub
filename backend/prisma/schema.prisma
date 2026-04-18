@@ -136,6 +136,17 @@ model Feedback {
   @@index([user_id])
 }
 
+model ContactMessage {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([email])
+}
+
 model Payment {
   id               String        @id @default(cuid())
   userId           String
