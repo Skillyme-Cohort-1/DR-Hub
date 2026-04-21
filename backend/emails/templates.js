@@ -55,7 +55,46 @@ function buildActivationEmail({ name, activationUrl }) {
   return { subject, text, html };
 }
 
+function buildBookingPendingEmail({ name, reference, roomName, date, slot, amountDue }) {
+  const safeName = name || 'there';
+
+  const subject = `Booking ${reference} — Payment Required`;
+
+  const text = [
+    `Hi ${safeName},`,
+    '',
+    'Your booking has been received and is pending payment.',
+    '',
+    'Booking Details:',
+    `  Reference : ${reference}`,
+    `  Room      : ${roomName}`,
+    `  Date      : ${date}`,
+    `  Slot      : ${slot}`,
+    `  Amount Due: ${amountDue}`,
+    '',
+    // TODO: Replace with real payment instructions
+    'Please contact support@drhub.com with your booking reference to receive payment instructions.',
+    '',
+    'Your slot will be held for 24 hours pending payment.',
+    '',
+    'Best regards,',
+    'DRHub Team',
+  ].join('\n');
+
+  const html = renderTemplate('booking-pending.html', {
+    name: safeName,
+    reference,
+    roomName,
+    date,
+    slot,
+    amountDue,
+  });
+
+  return { subject, text, html };
+}
+
 module.exports = {
   buildWelcomeEmail,
   buildActivationEmail,
+  buildBookingPendingEmail
 };

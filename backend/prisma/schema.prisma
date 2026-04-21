@@ -12,7 +12,7 @@ model User {
   name             String
   email            String                   @unique
   role             Role                     @default(MEMBER)
-  passwordHash     String
+  passwordHash     String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
   address          String?
@@ -21,7 +21,7 @@ model User {
   gender           Gender?
   phoneNumber      String?                  @unique
   status           UserStatus               @default(INACTIVE)
-  occupation       String                   @default("Lawyer")
+  occupation       String?                  @default("Lawyer")
   activationTokens AccountActivationToken[]
   resetTokens      PasswordResetToken[]
   documents        UserDocument[]

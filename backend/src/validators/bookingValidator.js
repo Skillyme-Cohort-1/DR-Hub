@@ -1,6 +1,5 @@
 const { z } = require('zod');
 
-// SLOT ENUM - Must match TimeSlot enum in schema.prisma exactly
 const TimeSlot = z.enum(['MORNING', 'AFTERNOON', 'EVENING'], {
   errorMap: () => ({
     message: 'slot must be one of: MORNING, AFTERNOON, EVENING'
@@ -21,7 +20,7 @@ const BookingDate = z.string({
     // Rule 2 — cannot book in the past
     const selected = new Date(val);
     const today    = new Date();
-    today.setHours(0, 0, 0, 0);  
+    today.setHours(0, 0, 0, 0);
     return selected >= today;
   }, { message: 'Booking date cannot be in the past' })
 
@@ -35,6 +34,15 @@ const BookingDate = z.string({
 
 // CREATE BOOKING SCHEMA
 const createBookingSchema = z.object({
+  name: z.string({
+    required_error: 'name is required'
+  }).min(2, { message: 'name must be at least 2 characters' })
+    .max(100, { message: 'name cannot exceed 100 characters' }),
+
+  email: z.string({
+    required_error: 'email is required'
+  }).email({ message: 'Invalid email address' }),
+
   roomId: z.string({
     required_error: 'roomId is required'
   }).cuid({ message: 'Invalid roomId format' }),
@@ -63,7 +71,6 @@ const validate = (schema, data) => {
   const result = schema.safeParse(data);
 
   if (!result.success) {
-    // Guard against unexpected zod error shapes
     const rawErrors = result.error?.errors ?? [];
     const errors = rawErrors.map((err) => ({
       field:   err.path?.join('.') || 'unknown',
