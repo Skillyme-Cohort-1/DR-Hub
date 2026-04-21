@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "../components/AuthLayout";
 
@@ -6,6 +7,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const justRegistered = searchParams.get("registered") === "1";
+  const [submitError, setSubmitError] = useState("");
 
   const {
     register,
@@ -15,12 +17,52 @@ export function LoginPage() {
     defaultValues: { email: "", password: "", remember: false },
   });
 
-  const onSubmit = async () => {
-    // Replace with API call + token storage when backend is ready
-    await new Promise((r) => setTimeout(r, 400));
+  const onSubmit = async (values) => {
+    setSubmitError("");
+
+    let response;
+    try {
+      response = await fetch("http://localhost:3000/api/users/login", {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+        }),
+      });
+    } catch {
+      setSubmitError("Could not reach the server. Please check your connection and try again.");
+      return;
+    }
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      setSubmitError(payload?.message || "Login failed. Please check your credentials.");
+      return;
+    }
+
+    const accessToken = payload?.token || "";
+    if (!accessToken) {
+      setSubmitError("Login succeeded but no access token was returned.");
+      return;
+    }
+
     localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("authToken", accessToken);
+    if (payload?.user) {
+      localStorage.setItem("authUser", JSON.stringify(payload.user));
+    }
+
     navigate("/dashboard", { replace: true });
-    navigate("/", { replace: true });
   };
 
   return (
@@ -111,6 +153,11 @@ export function LoginPage() {
         >
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
+        {submitError ? (
+          <p className="text-sm text-red-400" role="alert">
+            {submitError}
+          </p>
+        ) : null}
       </form>
 
       <p className="mt-8 text-center text-sm text-white/55">

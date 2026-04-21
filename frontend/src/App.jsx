@@ -8,19 +8,39 @@ import { BookingPage } from './app/pages/BookingPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
 import ContactPage from './app/pages/ContactPage';
 
-// Simple protected route
+function isAuthenticated() {
+  return localStorage.getItem('isLoggedIn') === 'true';
+}
+
 function PrivateRoute({ children }) {
-  const isLoggedIn = localStorage.getItem('isLoggedIn');
-  return isLoggedIn ? children : <Navigate to="/login" />;
+  return isAuthenticated() ? children : <Navigate to="/login" replace />;
+}
+
+function PublicOnlyRoute({ children }) {
+  return isAuthenticated() ? <Navigate to="/dashboard" replace /> : children;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/" element={isAuthenticated() ? <Navigate to="/dashboard" replace /> : <HomePage />} />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicOnlyRoute>
+              <RegisterPage />
+            </PublicOnlyRoute>
+          }
+        />
         <Route path="/booking" element={<BookingPage />} />
         <Route path="/contact" element={<ContactPage />} />
 

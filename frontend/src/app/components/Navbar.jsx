@@ -41,7 +41,7 @@ export function Navbar() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-300",
         scrolled || open
-          ? "border-white/10 bg-black/85 backdrop-blur-md"
+          ? "border-white/10 bg-[#050505]"
           : "border-transparent bg-gradient-to-b from-black/70 to-transparent backdrop-blur-[2px]"
       )}
     >
@@ -112,7 +112,7 @@ export function Navbar() {
       <div
         id="mobile-nav"
         className={cn(
-          "fixed inset-x-0 top-[4.25rem] bottom-0 z-40 bg-black/95 backdrop-blur-lg transition-opacity duration-200 lg:hidden",
+          "fixed inset-x-0 top-[4.25rem] bottom-0 z-40 bg-[#050505] transition-opacity duration-200 lg:hidden",
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         )}
         aria-hidden={!open}
