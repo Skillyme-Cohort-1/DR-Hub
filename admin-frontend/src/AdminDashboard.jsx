@@ -318,6 +318,7 @@ export default function AdminDashboard() {
   const [bookings, setBookings]       = useState(INITIAL_BOOKINGS);
   const [leads, setLeads]             = useState(INITIAL_LEADS);
   const [filter, setFilter]           = useState("all");
+  const [leadFilter, setLeadFilter]   = useState("all");
   const [search, setSearch]           = useState("");
   const [toasts, setToasts]           = useState([]);
   const [showModal, setShowModal]     = useState(false);
@@ -367,6 +368,16 @@ export default function AdminDashboard() {
   const [roomFormError, setRoomFormError] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [showRoomModal, setShowRoomModal] = useState(false);
+   // ── LEAD MODAL STATE ──
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [newLeadData, setNewLeadData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    stage: 'new',
+    notes: ''
+  });
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -674,89 +685,97 @@ export default function AdminDashboard() {
   };
 
   const createRoom = async () => {
-    if (!newRoomData.name.trim() || !newRoomData.capacity) {
-      setRoomFormError("Room name and capacity are required.");
-      return;
+  if (!newRoomData.name.trim() || !newRoomData.capacity) {
+    setRoomFormError("Room name and capacity are required.");
+    return;
+  }
+  setRoomFormError("");
+  setRoomsSubmitting(true);
+  try {
+    const response = await fetch("http://localhost:3000/api/rooms", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: newRoomData.name,
+        capacity: parseInt(newRoomData.capacity),
+        description: newRoomData.description
+      })
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room created successfully", "green", "✓");
+      setNewRoomData({ name: '', capacity: '', description: '' });
+      setShowRoomModal(false);
+      fetchRooms();
+    } else {
+      setRoomFormError(data.message || "Failed to create room.");
     }
-    setRoomFormError("");
-    setRoomsSubmitting(true);
-    try {
-      const response = await fetch("http://localhost:3000/api/rooms/admin/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newRoomData.name,
-          capacity: parseInt(newRoomData.capacity),
-          description: newRoomData.description
-        })
-      });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room created successfully", "green", "✓");
-        setNewRoomData({ name: '', capacity: '', description: '' });
-        setShowRoomModal(false);
-        fetchRooms();
-      } else {
-        setRoomFormError(data.message || "Failed to create room.");
-      }
-    } catch {
-      setRoomFormError("Error creating room.");
-    } finally {
-      setRoomsSubmitting(false);
-    }
-  };
-
+  } catch {
+    setRoomFormError("Error creating room.");
+  } finally {
+    setRoomsSubmitting(false);
+  }
+};
   const updateRoom = async () => {
-    if (!editRoomData.name.trim() || !editRoomData.capacity) {
-      setRoomFormError("Room name and capacity are required.");
-      return;
+  if (!editRoomData.name.trim() || !editRoomData.capacity) {
+    setRoomFormError("Room name and capacity are required.");
+    return;
+  }
+  setRoomFormError("");
+  setRoomsSubmitting(true);
+  try {
+    const response = await fetch(`http://localhost:3000/api/rooms/${editingRoomId}`, {
+      method: "PUT",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: editRoomData.name,
+        capacity: parseInt(editRoomData.capacity),
+        description: editRoomData.description
+      })
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room updated successfully", "green", "✓");
+      setEditingRoomId(null);
+      setEditRoomData({ name: '', capacity: '', description: '' });
+      setShowRoomModal(false);
+      fetchRooms();
+    } else {
+      setRoomFormError(data.message || "Failed to update room.");
     }
-    setRoomFormError("");
-    setRoomsSubmitting(true);
-    try {
-      const response = await fetch(`http://localhost:3000/api/rooms/admin/rooms/${editingRoomId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editRoomData.name,
-          capacity: parseInt(editRoomData.capacity),
-          description: editRoomData.description
-        })
-      });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room updated successfully", "green", "✓");
-        setEditingRoomId(null);
-        setEditRoomData({ name: '', capacity: '', description: '' });
-        setShowRoomModal(false);
-        fetchRooms();
-      } else {
-        setRoomFormError(data.message || "Failed to update room.");
-      }
-    } catch {
-      setRoomFormError("Error updating room.");
-    } finally {
-      setRoomsSubmitting(false);
-    }
-  };
+  } catch {
+    setRoomFormError("Error updating room.");
+  } finally {
+    setRoomsSubmitting(false);
+  }
+};
 
   const deleteRoom = async (id) => {
-    if (!confirm("Are you sure?")) return;
-    try {
-      const response = await fetch(`http://localhost:3000/api/rooms/admin/rooms/${id}`, {
-        method: "DELETE"
-      });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room deleted", "green", "✓");
-        fetchRooms();
-      } else {
-        addToast(data.message || "Failed to delete room", "red", "✗");
+  if (!confirm("Are you sure?")) return;
+  try {
+    const response = await fetch(`http://localhost:3000/api/rooms/${id}`, {
+      method: "DELETE",
+      headers: { 
+        "Authorization": `Bearer ${token}`
       }
-    } catch {
-      addToast("Error deleting room", "red", "✗");
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room deleted", "green", "✓");
+      fetchRooms();
+    } else {
+      addToast(data.message || "Failed to delete room", "red", "✗");
     }
-  };
+  } catch {
+    addToast("Error deleting room", "red", "✗");
+  }
+};
 
   const openCreateRoomModal = () => {
     setEditingRoomId(null);
@@ -1651,57 +1670,117 @@ export default function AdminDashboard() {
   </div>
 )}
 
-            {/* ── LEADS ── */}
+                        {/* ── LEADS ── */}
             {activeNav === "leads" && (
               <div className="dh-panel">
                 <div className="dh-panel-hd">
                   <div>
                     <div className="dh-panel-title">Lead Pipeline</div>
-                    <div className="dh-panel-sub">Track inquiries from new to converted</div>
+                    <div className="dh-panel-sub">Track and manage potential clients</div>
                   </div>
-                  <button className="dh-btn-primary" onClick={() => {
-                    const name = prompt("New lead name:");
-                    if (!name) return;
-                    const phone = prompt("Phone number:");
-                    setLeads(p => [...p, { id: Date.now(), name, initials: name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(), color:"#6c63ff", stage:"new", phone: phone||"", note:"" }]);
-                    addToast(`${name} added to pipeline`, "green", "🎯");
-                  }}>+ Add Lead</button>
+                 <button className="dh-btn-primary" onClick={() => setShowLeadModal(true)}>+ Add Lead</button>
                 </div>
-                {/* Pipeline columns */}
-                <div className="dh-leads-grid">
-                  {["new","follow-up","converted"].map(stage => (
-                    <div key={stage} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:14,border:"1px solid rgba(255,255,255,0.07)"}}>
-                      <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:12,
-                        color:stage==="new"?"#3B82F6":stage==="follow-up"?"#F59E0B":"#22C55E"}}>
-                        {stage} ({leads.filter(l=>l.stage===stage).length})
-                      </div>
-                      {leads.filter(l => l.stage === stage).map(l => (
-                        <div key={l.id} style={{background:"#1E1E1E",borderRadius:8,padding:14,marginBottom:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                            <Avatar initials={l.initials} color={l.color} size={30}/>
-                            <div>
-                              <div style={{fontSize:12,fontWeight:600}}>{l.name}</div>
-                              <div style={{fontSize:10,color:"#888"}}>{l.phone}</div>
-                            </div>
-                          </div>
-                          {l.note && <div style={{fontSize:11,color:"#888",marginBottom:10,fontStyle:"italic",lineHeight:1.5}}>"{l.note}"</div>}
-                          <div style={{marginBottom:8}}>
-                            <input className="dh-note-input" placeholder="Add a note..." defaultValue={l.note}
-                              onChange={e => setNoteInputs(p => ({...p,[l.id]:e.target.value}))}/>
-                          </div>
-                          <div style={{display:"flex",gap:6}}>
-                            <button className="dh-lead-btn" onClick={() => saveNote(l.id)}>💬 Save</button>
-                            {stage !== "converted" && (
-                              <button className="dh-lead-btn" style={{color:"#22C55E",borderColor:"rgba(34,197,94,0.2)"}}
-                                onClick={() => advanceLead(l.id)}>
-                                → {stage==="new"?"Follow Up":"Convert"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+
+                {/* Filter Tabs */}
+                <div className="dh-filter-bar">
+                  {["all", "new", "follow-up", "converted"].map(stage => (
+                    <button 
+                      key={stage} 
+                      className={`dh-filter-btn ${leadFilter === stage ? "active-filter" : ""}`} 
+                      onClick={() => setLeadFilter(stage)}
+                    >
+                      {stage === "all" ? "All" : stage.charAt(0).toUpperCase() + stage.slice(1)}
+                      <span style={{ marginLeft: 5, opacity: 0.7 }}>
+                        ({stage === "all" ? leads.length : leads.filter(l => l.stage === stage).length})
+                      </span>
+                    </button>
                   ))}
+                </div>
+
+                {/* Leads Table */}
+                <div className="dh-table-wrap">
+                  <table className="dh-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Stage</th>
+                        <th>Notes</th>
+                        <th>Added</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leads
+                        .filter(l => leadFilter === "all" || l.stage === leadFilter)
+                        .map((lead) => (
+                          <tr key={lead.id}>
+                            <td>
+                              <div className="dh-client-cell">
+                                <Avatar initials={lead.initials} color={lead.color} size={34} />
+                                <div>
+                                  <div className="dh-cname">{lead.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div>{lead.phone || "—"}</div>
+                              <div style={{ fontSize: 11, color: "#888" }}>{lead.email || "—"}</div>
+                            </td>
+                            <td>
+                              <span className={`dh-lead-stage stage-${lead.stage === "follow-up" ? "follow-up" : lead.stage}`}>
+                                {lead.stage === "follow-up" ? "Follow Up" : lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1)}
+                              </span>
+                            </td>
+                            <td>
+                              <input
+                                className="dh-note-input"
+                                placeholder="Add note..."
+                                defaultValue={lead.note}
+                                style={{ width: 180 }}
+                                onChange={(e) => setNoteInputs(p => ({ ...p, [lead.id]: e.target.value }))}
+                                onBlur={() => saveNote(lead.id)}
+                              />
+                            </td>
+                            <td style={{ color: "#888", fontSize: 11 }}>
+                              {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : "Just now"}
+                            </td>
+                            <td>
+                              <div className="dh-actions">
+                                {lead.stage !== "converted" && (
+                                  <button
+                                    className="dh-action-btn btn-approve"
+                                    onClick={() => advanceLead(lead.id)}
+                                    title="Move to next stage"
+                                  >
+                                    → {lead.stage === "new" ? "Follow Up" : "Convert"}
+                                  </button>
+                                )}
+                                <button
+                                  className="dh-action-btn btn-reject"
+                                  onClick={() => {
+                                    if (confirm(`Remove ${lead.name} from leads?`)) {
+                                      setLeads(p => p.filter(l => l.id !== lead.id));
+                                      addToast("Lead removed", "orange", "🗑");
+                                    }
+                                  }}
+                                  title="Remove lead"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {leads.filter(l => leadFilter === "all" || l.stage === leadFilter).length === 0 && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">No leads found. Click "+ Add Lead" to get started.</div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -1822,6 +1901,129 @@ export default function AdminDashboard() {
 
           </div>
         </main>
+
+ {/* ── CAPTURE LEAD MODAL ── */}
+        {showLeadModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowLeadModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd" style={{ background: "linear-gradient(135deg, #F07B2B 0%, #FF8C42 100%)" }}>
+                <div className="dh-modal-title" style={{ color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "20px" }}>🎯</span> Capture New Lead
+                </div>
+                <button className="dh-modal-close" onClick={() => setShowLeadModal(false)} style={{ color: "#fff" }}>✕</button>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newLeadData.name.trim()) {
+                    addToast("Lead name is required", "red", "!");
+                    return;
+                  }
+                  setLeadSubmitting(true);
+                  const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
+                  const newLead = {
+                    id: Date.now(),
+                    name: newLeadData.name,
+                    initials: newLeadData.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+                    color: randomColor,
+                    stage: newLeadData.stage,
+                    phone: newLeadData.phone || "",
+                    email: newLeadData.email || "",
+                    note: newLeadData.notes || "",
+                    createdAt: new Date().toISOString()
+                  };
+                  setLeads(prev => [...prev, newLead]);
+                  addToast(`${newLeadData.name} added to pipeline!`, "green", "✓");
+                  setShowLeadModal(false);
+                  setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
+                  setLeadSubmitting(false);
+                }}
+              >
+                <div className="dh-modal-body">
+                  <div className="dh-form-row">
+                    <div className="dh-form-group">
+                      <label style={{ color: "#F07B2B" }}>Full Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. John Mwangi"
+                        value={newLeadData.name}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, name: e.target.value })}
+                        required
+                        style={{ borderLeft: "3px solid #F07B2B" }}
+                      />
+                    </div>
+                    <div className="dh-form-group">
+                      <label style={{ color: "#22C55E" }}>Phone Number</label>
+                      <input
+                        type="tel"
+                        placeholder="+254 XXX XXX XXX"
+                        value={newLeadData.phone}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, phone: e.target.value })}
+                        style={{ borderLeft: "3px solid #22C55E" }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dh-form-row">
+                    <div className="dh-form-group">
+                      <label style={{ color: "#3B82F6" }}>Email Address</label>
+                      <input
+                        type="email"
+                        placeholder="client@example.com"
+                        value={newLeadData.email}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })}
+                        style={{ borderLeft: "3px solid #3B82F6" }}
+                      />
+                    </div>
+                    <div className="dh-form-group">
+                      <label style={{ color: "#F59E0B" }}>Lead Stage</label>
+                      <select
+                        value={newLeadData.stage}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, stage: e.target.value })}
+                        style={{ borderLeft: "3px solid #F59E0B" }}
+                      >
+                        <option value="new">🟢 New Lead</option>
+                        <option value="follow-up">🟡 Follow-up</option>
+                        <option value="converted">🔵 Converted</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="dh-form-group">
+                    <label style={{ color: "#888" }}>📝 Notes / Comments</label>
+                    <textarea
+                      rows="3"
+                      placeholder="Additional information about this lead..."
+                      value={newLeadData.notes}
+                      onChange={(e) => setNewLeadData({ ...newLeadData, notes: e.target.value })}
+                      style={{ resize: "vertical", borderLeft: "3px solid #F07B2B" }}
+                    />
+                  </div>
+                </div>
+                <div className="dh-modal-ft">
+                  <button 
+                    type="button" 
+                    className="dh-btn-cancel" 
+                    onClick={() => {
+                      setShowLeadModal(false);
+                      setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="dh-btn-primary" 
+                    disabled={leadSubmitting}
+                    style={{ background: "linear-gradient(135deg, #F07B2B 0%, #FF8C42 100%)" }}
+                  >
+                    {leadSubmitting ? "Adding..." : "➕ Add Lead"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* ── BOOKING DETAIL MODAL ── */}
         {viewBooking && (
@@ -2272,4 +2474,3 @@ export default function AdminDashboard() {
     </>
   );
 }
-

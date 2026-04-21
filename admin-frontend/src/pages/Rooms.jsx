@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const API_URL = 'http://localhost:3000/api/rooms';
 
 export default function Rooms() {
+  const { token } = useAuth();  // Get the auth token
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({ name: '', capacity: '', description: '' });
@@ -11,6 +13,14 @@ export default function Rooms() {
   useEffect(() => {
     loadRooms();
   }, []);
+
+  // Helper function to get headers with auth token
+  const getHeaders = () => {
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   const loadRooms = async () => {
     try {
@@ -29,9 +39,9 @@ export default function Rooms() {
   const createRoom = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/`, {
+      const response = await fetch(API_URL, {  // Fixed: removed extra slash
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           name: formData.name,
           capacity: parseInt(formData.capacity),
@@ -53,9 +63,9 @@ export default function Rooms() {
 
   const updateRoom = async (id) => {
     try {
-      const response = await fetch(`${API_URL}/admin/rooms/${id}`, {
+      const response = await fetch(`${API_URL}/${id}`, {  // Fixed: removed /admin/rooms
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           name: formData.name,
           capacity: parseInt(formData.capacity),
@@ -79,8 +89,9 @@ export default function Rooms() {
   const deleteRoom = async (id) => {
     if (!confirm('Are you sure?')) return;
     try {
-      const response = await fetch(`${API_URL}/admin/rooms/${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`${API_URL}/${id}`, {  // Fixed: removed /admin/rooms
+        method: 'DELETE',
+        headers: getHeaders()
       });
       const data = await response.json();
       if (data.success) {
