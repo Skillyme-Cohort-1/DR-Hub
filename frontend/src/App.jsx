@@ -1,11 +1,11 @@
 import './App.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
 import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
+import { Toaster } from "@/components/ui/sonner"
 
 // Simple protected route
 function PrivateRoute({ children }) {
@@ -16,6 +16,7 @@ function PrivateRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster richColors position="top-right"/>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />

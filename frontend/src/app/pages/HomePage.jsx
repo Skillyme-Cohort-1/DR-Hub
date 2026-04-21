@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { rooms } from "../components/serviceRooms";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 import {
@@ -15,6 +14,7 @@ import {
   Star,
   ChevronRight,
 } from "lucide-react";
+import RoomsSection from "../components/RoomsSection";
 
 const testimonials = [
   {
@@ -142,43 +142,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {rooms.map((room) => {
-                const RoomIcon = room.icon;
-                return (
-                  <Card
-                    key={room.name}
-                    className="group overflow-hidden border border-white/10 bg-zinc-900/40 p-0 transition-all duration-300 hover:-translate-y-1 hover:border-[#E87722]/50 hover:shadow-lg hover:shadow-black/40"
-                  >
-                    <div className="relative aspect-[4/3] overflow-hidden">
-                      <img
-                        src={room.image}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    </div>
-                    <CardHeader className="px-6 pt-6">
-                      <CardTitle className="flex items-center gap-3 text-xl text-white">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#E87722]/15 text-[#E87722] ring-1 ring-[#E87722]/25">
-                          <RoomIcon className="h-5 w-5" aria-hidden />
-                        </span>
-                        {room.name}
-                      </CardTitle>
-                      <CardDescription className="text-base text-white/55">{room.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="px-6 pb-6">
-                      <Button
-                        asChild
-                        className="w-full rounded-md bg-[#E87722] py-6 text-base text-white hover:bg-[#d96d1f]"
-                      >
-                        <Link to="/booking">Book this room</Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            <RoomsSection />
           </div>
         </section>
 
