@@ -6,6 +6,7 @@ import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
+import ContactPage from './app/pages/ContactPage';
 
 // Simple protected route
 function PrivateRoute({ children }) {
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/booking" element={<BookingPage />} />
+        <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected Dashboard Route */}
         <Route

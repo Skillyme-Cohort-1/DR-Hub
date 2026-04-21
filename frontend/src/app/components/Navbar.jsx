@@ -10,6 +10,7 @@ const navLinks = [
   { label: "Amenities", href: "/#amenities" },
   { label: "How it works", href: "/#process" },
   { label: "Reviews", href: "/#testimonials" },
+  { label: "Contact Us", href: "/contact" },
 ];
 
 export function Navbar() {
@@ -65,12 +66,21 @@ export function Navbar() {
         <ul className="hidden items-center gap-1 lg:flex">
           {navLinks.map(({ label, href }) => (
             <li key={href}>
-              <a
-                href={href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {label}
-              </a>
+              {href.startsWith("/#") ? (
+                <a
+                  href={href}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {label}
+                </a>
+              ) : (
+                <Link
+                  to={href}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {label}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -108,16 +118,27 @@ export function Navbar() {
         aria-hidden={!open}
       >
         <div className="mx-auto flex max-w-[1280px] flex-col gap-1 px-4 py-6 sm:px-6">
-          {navLinks.map(({ label, href }) => (
-            <a
-              key={href}
-              href={href}
-              className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
-              onClick={() => setOpen(false)}
-            >
-              {label}
-            </a>
-          ))}
+          {navLinks.map(({ label, href }) =>
+            href.startsWith("/#") ? (
+              <a
+                key={href}
+                href={href}
+                className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
+                onClick={() => setOpen(false)}
+              >
+                {label}
+              </a>
+            ) : (
+              <Link
+                key={href}
+                to={href}
+                className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
+                onClick={() => setOpen(false)}
+              >
+                {label}
+              </Link>
+            )
+          )}
           <hr className="my-4 border-white/10" />
           <Button variant="ghost" asChild className="justify-start text-white hover:bg-white/10">
             <Link to="/login" onClick={() => setOpen(false)}>
