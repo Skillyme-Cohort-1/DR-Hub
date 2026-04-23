@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "../components/AuthLayout";
 
@@ -17,6 +18,7 @@ function validatePhone(value) {
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const [submitError, setSubmitError] = useState("");
 
   const {
     register,
@@ -30,15 +32,46 @@ export function RegisterPage() {
       email: "",
       phone: "",
       gender: "",
+      occupation: "",
       password: "",
       confirmPassword: "",
       acceptTerms: false,
     },
   });
 
-  const onSubmit = async () => {
-    // Replace with API registration when backend is ready
-    await new Promise((r) => setTimeout(r, 500));
+  const onSubmit = async (values) => {
+    setSubmitError("");
+
+    const payload = {
+      name: `${values.firstName} ${values.lastName}`.trim(),
+      phoneNumber: values.phone,
+      gender: values.gender,
+      email: values.email,
+      password: values.password,
+      occupation: values.occupation,
+    };
+
+    let response;
+    try {
+      response = await fetch("http://localhost:3000/api/users/self-registration", {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      setSubmitError("Could not reach the server. Please check your connection and try again.");
+      return;
+    }
+
+    if (!response.ok) {
+      const rawMessage = await response.text();
+      setSubmitError(rawMessage || "Registration failed. Please review your details and try again.");
+      return;
+    }
+
     navigate("/login?registered=1", { replace: true });
   };
 
@@ -164,14 +197,35 @@ export function RegisterPage() {
             <option value="" disabled>
               Select gender
             </option>
-            <option value="female">Female</option>
-            <option value="male">Male</option>
-            <option value="non_binary">Non-binary</option>
-            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="FEMALE">Female</option>
+            <option value="MALE">Male</option>
           </select>
           {errors.gender ? (
             <p className="mt-1.5 text-sm text-red-400" role="alert">
               {errors.gender.message}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="md:col-span-2">
+          <label htmlFor="register-occupation" className="mb-2 block text-sm font-medium text-white/80">
+            Occupation
+          </label>
+          <input
+            id="register-occupation"
+            type="text"
+            autoComplete="organization-title"
+            className={inputClassName}
+            placeholder="e.g. Divorce Lawyer"
+            {...register("occupation", {
+              required: "Enter your occupation",
+              minLength: { value: 2, message: "Too short" },
+            })}
+            aria-invalid={errors.occupation ? "true" : "false"}
+          />
+          {errors.occupation ? (
+            <p className="mt-1.5 text-sm text-red-400" role="alert">
+              {errors.occupation.message}
             </p>
           ) : null}
         </div>
@@ -253,6 +307,11 @@ export function RegisterPage() {
         {errors.acceptTerms ? (
           <p className="text-sm text-red-400 md:col-span-2" role="alert">
             {errors.acceptTerms.message}
+          </p>
+        ) : null}
+        {submitError ? (
+          <p className="text-sm text-red-400 md:col-span-2" role="alert">
+            {submitError}
           </p>
         ) : null}
 

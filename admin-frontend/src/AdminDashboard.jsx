@@ -4,32 +4,59 @@ import { useAuth } from "./context/AuthContext.jsx";
 
 const SIDEBAR_BREAKPOINT = 960;
 
-// ─── MOCK DATA ───────────────────────────────────────────────────────────────
-const INITIAL_BOOKINGS = [
-  { id: "BK001", name: "Jane Mwangi",    initials: "JM", color: "#6c63ff", type: "ADR Practitioner", room: "Private Office", roomIcon: "🏛️", date: "2026-04-01", slot: "10am–1pm", amount: 6000,  status: "pending",   payment: "paid",    doc: true  },
-  { id: "BK002", name: "David Kamau",    initials: "DK", color: "#059669", type: "Young Advocate",   room: "Boardroom",      roomIcon: "📋", date: "2026-04-01", slot: "2pm–5pm",  amount: 2500,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK003", name: "Amina Ochieng",  initials: "AO", color: "#F07B2B", type: "DR Hub Member",    room: "Private Office", roomIcon: "🏛️", date: "2026-04-02", slot: "10am–1pm", amount: 2000,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK004", name: "Brian Njoroge",  initials: "BN", color: "#3B82F6", type: "ADR Practitioner", room: "Combined",       roomIcon: "⚖️",  date: "2026-04-02", slot: "2pm–5pm",  amount: 7500,  status: "pending",   payment: "pending", doc: true  },
-  { id: "BK005", name: "Faith Wanjiku",  initials: "FW", color: "#7C3AED", type: "Young Advocate",   room: "Boardroom",      roomIcon: "📋", date: "2026-04-03", slot: "5pm–8pm",  amount: 4000,  status: "completed", payment: "paid",    doc: true  },
-  { id: "BK006", name: "Samuel Mutua",   initials: "SM", color: "#EC4899", type: "ADR Practitioner", room: "Private Office", roomIcon: "🏛️", date: "2026-04-03", slot: "10am–1pm", amount: 6000,  status: "pending",   payment: "paid",    doc: false },
-  { id: "BK007", name: "Lydia Ndungu",   initials: "LN", color: "#0891b2", type: "DR Hub Member",    room: "Boardroom",      roomIcon: "📋", date: "2026-04-04", slot: "2pm–5pm",  amount: 2000,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK008", name: "Peter Otieno",   initials: "PO", color: "#16a34a", type: "Young Advocate",   room: "Combined",       roomIcon: "⚖️",  date: "2026-04-04", slot: "10am–1pm", amount: 7500,  status: "rejected",  payment: "pending", doc: true  },
-];
+// ─── API-DERIVED UI CONFIG ───────────────────────────────────────────────────
+const BOOKING_COLORS = ["#6c63ff", "#059669", "#F07B2B", "#3B82F6", "#7C3AED", "#EC4899", "#0891b2", "#16a34a"];
 
-const INITIAL_LEADS = [
-  { id: 1, name: "Samuel Mutua",  initials: "SM", color: "#6c63ff", stage: "new",       phone: "+254 712 111 222", note: "" },
-  { id: 2, name: "Lydia Ndungu",  initials: "LN", color: "#F07B2B", stage: "follow-up", phone: "+254 723 333 444", note: "Called twice, interested in boardroom" },
-  { id: 3, name: "Peter Otieno",  initials: "PO", color: "#22C55E", stage: "converted", phone: "+254 734 555 666", note: "Booked Private Office for April" },
-  { id: 4, name: "Grace Akinyi",  initials: "GA", color: "#3B82F6", stage: "new",       phone: "+254 745 777 888", note: "" },
-];
+function getRoomIcon(roomName) {
+  if (roomName === "Private Office") return "🏛️";
+  if (roomName === "Boardroom") return "📋";
+  return "⚖️";
+}
 
-const SLOTS = ["10am–1pm", "2pm–5pm", "5pm–8pm"];
-const ROOMS = ["Private Office", "Boardroom", "Combined"];
-const DAYS  = ["Mon 30 Mar", "Tue 31 Mar", "Wed 1 Apr", "Thu 2 Apr", "Fri 3 Apr"];
-const DUMMY_CLIENT_BOOKINGS = [
-  { id: "BK901", room: "Private Office", date: "2026-04-10", slot: "10am–1pm", status: "confirmed", amount: 6000 },
-  { id: "BK902", room: "Boardroom", date: "2026-04-14", slot: "2pm–5pm", status: "pending", amount: 2500 },
-];
+function normalizeBookingStatus(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "approved") return "confirmed";
+  if (normalized === "cancelled") return "rejected";
+  return ["pending", "confirmed", "rejected", "completed"].includes(normalized) ? normalized : "pending";
+}
+
+function normalizeBookingPayment(payment) {
+  const raw = String(payment?.status || payment || "").toLowerCase();
+  if (["success", "completed", "paid"].includes(raw)) return "paid";
+  return "pending";
+}
+
+function mapApiBookingToDashboardBooking(booking, index) {
+  const name = booking?.user?.name || "Unknown Client";
+  const roomName = booking?.room?.name || "Combined";
+  const parsedDate = booking?.date ? new Date(booking.date) : null;
+  const isoDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : "";
+  const slotTitle = typeof booking?.slot?.title === "string" && booking.slot.title.trim() ? booking.slot.title.trim() : "N/A";
+  return {
+    id: booking?.reference || booking?.id || `BK${String(index + 1).padStart(3, "0")}`,
+    name,
+    initials: getInitials(name),
+    color: BOOKING_COLORS[index % BOOKING_COLORS.length],
+    type: "Member",
+    room: roomName,
+    roomIcon: getRoomIcon(roomName),
+    date: isoDate,
+    slot: slotTitle,
+    amount: Number(booking?.amountCharged) || 0,
+    status: normalizeBookingStatus(booking?.status),
+    payment: normalizeBookingPayment(booking?.payment),
+    userId: booking?.userId || booking?.user?.id || null,
+    roomId: booking?.roomId || booking?.room?.id || null,
+  };
+}
+
+function formatCalendarDayLabel(isoDate) {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  const weekDay = parsed.toLocaleDateString("en-US", { weekday: "short" });
+  const month = parsed.toLocaleDateString("en-US", { month: "short" });
+  return `${weekDay} ${parsed.getDate()} ${month}`;
+}
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const css = `
@@ -154,6 +181,7 @@ const css = `
   .dh-cal-slot:hover { transform: scale(1.03); }
   .cal-booked    { background: rgba(240,123,43,0.12); border-color: rgba(240,123,43,0.25); color: #F07B2B; }
   .cal-available { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.2);  color: #22C55E; }
+  .cal-unavailable { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.07); color: #555; }
   .cal-blocked   { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.07); color: #555; }
   .dh-cal-legend { display: flex; gap: 14px; padding: 12px 0 2px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
   .dh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #888; }
@@ -284,6 +312,16 @@ function mapDocumentStatus(apiStatus) {
   return "Pending";
 }
 
+function getInitials(name) {
+  return String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .map(part => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function getDocumentPreviewUrl(doc, apiBaseUrl) {
   if (!doc) return null;
   if (doc.documentUrl) return doc.documentUrl;
@@ -315,15 +353,30 @@ export default function AdminDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen]       = useState(false);
   const [activeNav, setActiveNav]     = useState("overview");
-  const [bookings, setBookings]       = useState(INITIAL_BOOKINGS);
-  const [leads, setLeads]             = useState(INITIAL_LEADS);
+  const [bookings, setBookings]       = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState("");
+  const [allSlots, setAllSlots] = useState([]);
+  const [leads, setLeads]             = useState([]);
   const [filter, setFilter]           = useState("all");
   const [leadFilter, setLeadFilter]   = useState("all");
   const [search, setSearch]           = useState("");
   const [toasts, setToasts]           = useState([]);
   const [showModal, setShowModal]     = useState(false);
   const [viewBooking, setViewBooking] = useState(null);
-  const [newBooking, setNewBooking]   = useState({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
+  const [newBooking, setNewBooking]   = useState({
+    name: "",
+    userId: "",
+    room: "",
+    roomId: "",
+    date: "",
+    slot: "",
+    slotId: "",
+    amount: "",
+    payment: "pending",
+    numberOfAttendees: 1,
+  });
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [noteInputs, setNoteInputs]   = useState({});
   const [users, setUsers]             = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -360,16 +413,23 @@ export default function AdminDashboard() {
   const clientDocInputRef = useRef(null);
     // ── ROOMS STATE ──
   const [roomsData, setRoomsData] = useState([]);
-  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', description: '' });
+  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', cost: '', description: '' });
   const [editingRoomId, setEditingRoomId] = useState(null);
-  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
+  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', cost: '', description: '' });
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [roomsSubmitting, setRoomsSubmitting] = useState(false);
   const [roomFormError, setRoomFormError] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [showRoomModal, setShowRoomModal] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [roomSlots, setRoomSlots] = useState([]);
+  const [roomSlotsLoading, setRoomSlotsLoading] = useState(false);
+  const [roomSlotsError, setRoomSlotsError] = useState("");
+  const [slotSubmitting, setSlotSubmitting] = useState(false);
+  const [slotForm, setSlotForm] = useState({ title: "", slotDate: "" });
    // ── LEAD MODAL STATE ──
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [viewLead, setViewLead] = useState(null);
   const [newLeadData, setNewLeadData] = useState({
     name: '',
     phone: '',
@@ -378,6 +438,8 @@ export default function AdminDashboard() {
     notes: ''
   });
   const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState("");
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -391,7 +453,102 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (activeNav !== "users" && activeNav !== "clients") return;
+    if (!token) {
+      setBookingsError("Authentication token is missing.");
+      return;
+    }
+
+    let cancelled = false;
+    const fetchBookings = async () => {
+      setBookingsLoading(true);
+      setBookingsError("");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setBookingsError(data.message || "Failed to fetch bookings.");
+          }
+          return;
+        }
+
+        const bookingList = Array.isArray(data.bookings) ? data.bookings : [];
+        const mappedBookings = bookingList.map((item, idx) => mapApiBookingToDashboardBooking(item, idx));
+        if (!cancelled) {
+          setBookings(mappedBookings);
+        }
+      } catch {
+        if (!cancelled) {
+          setBookingsError("Could not reach the bookings API.");
+        }
+      } finally {
+        if (!cancelled) {
+          setBookingsLoading(false);
+        }
+      }
+    };
+
+    fetchBookings();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setAllSlots([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchAllSlots = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/slots`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (!cancelled) setAllSlots([]);
+          return;
+        }
+
+        const slots = Array.isArray(data.slots)
+          ? data.slots
+          : Array.isArray(data.data)
+            ? data.data
+            : Array.isArray(data.items)
+              ? data.items
+              : [];
+        if (!cancelled) {
+          setAllSlots(slots);
+        }
+      } catch {
+        if (!cancelled) {
+          setAllSlots([]);
+        }
+      }
+    };
+
+    fetchAllSlots();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (activeNav !== "users" && activeNav !== "clients" && !showModal) return;
 
     const fetchUsers = async () => {
       if (!token) {
@@ -423,7 +580,80 @@ export default function AdminDashboard() {
     };
 
     fetchUsers();
-  }, [activeNav, token, usersReload]);
+  }, [activeNav, token, usersReload, showModal]);
+
+  useEffect(() => {
+    if (activeNav !== "leads") return;
+    if (!token) {
+      setLeadsError("Authentication token is missing.");
+      return;
+    }
+
+    let cancelled = false;
+    const leadColors = ["#6c63ff", "#F07B2B", "#22C55E", "#3B82F6", "#7C3AED", "#EC4899"];
+
+    const fetchLeads = async () => {
+      setLeadsLoading(true);
+      setLeadsError("");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/contact`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setLeads([]);
+            setLeadsError(data.message || "Failed to fetch leads.");
+          }
+          return;
+        }
+
+        const messages = Array.isArray(data.messages) ? data.messages : [];
+        const mappedLeads = messages.map((item, idx) => {
+          const name = item.fullName || "Unknown Lead";
+          const phone =
+            typeof item.phoneNumber === "string"
+              ? item.phoneNumber.trim()
+              : typeof item.phone === "string"
+                ? item.phone.trim()
+                : "";
+          return {
+            id: item.id || `lead-${idx}`,
+            name,
+            initials: getInitials(name),
+            color: leadColors[idx % leadColors.length],
+            stage: "new",
+            phone,
+            email: item.email || "",
+            note: item.message || "",
+            createdAt: item.createdAt || null,
+          };
+        });
+
+        if (!cancelled) {
+          setLeads(mappedLeads);
+        }
+      } catch {
+        if (!cancelled) {
+          setLeads([]);
+          setLeadsError("Could not reach the leads API.");
+        }
+      } finally {
+        if (!cancelled) setLeadsLoading(false);
+      }
+    };
+
+    fetchLeads();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeNav, token]);
 
   useEffect(() => {
     if (activeNav !== "rooms" || roomsData.length > 0) return;
@@ -685,8 +915,8 @@ export default function AdminDashboard() {
   };
 
   const createRoom = async () => {
-  if (!newRoomData.name.trim() || !newRoomData.capacity) {
-    setRoomFormError("Room name and capacity are required.");
+  if (!newRoomData.name.trim() || !newRoomData.capacity || newRoomData.cost === "") {
+    setRoomFormError("Room name, capacity, and cost are required.");
     return;
   }
   setRoomFormError("");
@@ -701,13 +931,14 @@ export default function AdminDashboard() {
       body: JSON.stringify({
         name: newRoomData.name,
         capacity: parseInt(newRoomData.capacity),
+        cost: parseFloat(newRoomData.cost),
         description: newRoomData.description
       })
     });
     const data = await response.json();
     if (data.success) {
       addToast("Room created successfully", "green", "✓");
-      setNewRoomData({ name: '', capacity: '', description: '' });
+      setNewRoomData({ name: '', capacity: '', cost: '', description: '' });
       setShowRoomModal(false);
       fetchRooms();
     } else {
@@ -720,8 +951,8 @@ export default function AdminDashboard() {
   }
 };
   const updateRoom = async () => {
-  if (!editRoomData.name.trim() || !editRoomData.capacity) {
-    setRoomFormError("Room name and capacity are required.");
+  if (!editRoomData.name.trim() || !editRoomData.capacity || editRoomData.cost === "") {
+    setRoomFormError("Room name, capacity, and cost are required.");
     return;
   }
   setRoomFormError("");
@@ -736,6 +967,7 @@ export default function AdminDashboard() {
       body: JSON.stringify({
         name: editRoomData.name,
         capacity: parseInt(editRoomData.capacity),
+        cost: parseFloat(editRoomData.cost),
         description: editRoomData.description
       })
     });
@@ -743,7 +975,7 @@ export default function AdminDashboard() {
     if (data.success) {
       addToast("Room updated successfully", "green", "✓");
       setEditingRoomId(null);
-      setEditRoomData({ name: '', capacity: '', description: '' });
+      setEditRoomData({ name: '', capacity: '', cost: '', description: '' });
       setShowRoomModal(false);
       fetchRooms();
     } else {
@@ -755,6 +987,95 @@ export default function AdminDashboard() {
     setRoomsSubmitting(false);
   }
 };
+
+  const fetchRoomSlots = async (roomId) => {
+    if (!roomId) return;
+    setRoomSlotsLoading(true);
+    setRoomSlotsError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/slots?roomId=${encodeURIComponent(roomId)}`, {
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRoomSlots([]);
+        setRoomSlotsError(data.message || "Failed to fetch room slots.");
+        return;
+      }
+
+      const slots = Array.isArray(data.slots)
+        ? data.slots
+        : Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.items)
+            ? data.items
+            : [];
+      const filteredSlots = slots.filter((slot) => {
+        const slotRoomId = slot.roomId || slot.room?.id;
+        if (!slotRoomId) return true;
+        return String(slotRoomId) === String(roomId);
+      });
+      setRoomSlots(filteredSlots);
+    } catch {
+      setRoomSlots([]);
+      setRoomSlotsError("Could not reach the slots API.");
+    } finally {
+      setRoomSlotsLoading(false);
+    }
+  };
+
+  const openRoomDetails = (room) => {
+    setSelectedRoom(room);
+    setSlotForm({ title: "", slotDate: "" });
+    setRoomSlotsError("");
+    setActiveNav("room-details");
+    fetchRoomSlots(room.id);
+  };
+
+  const createRoomSlot = async () => {
+    if (!selectedRoom?.id) {
+      setRoomSlotsError("No room selected.");
+      return;
+    }
+    if (!slotForm.title.trim() || !slotForm.slotDate) {
+      setRoomSlotsError("Slot title and slot date are required.");
+      return;
+    }
+
+    setSlotSubmitting(true);
+    setRoomSlotsError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/slots`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: slotForm.title.trim(),
+          slotDate: slotForm.slotDate,
+          roomId: selectedRoom.id,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRoomSlotsError(data.message || "Failed to create booking slot.");
+        return;
+      }
+
+      addToast(data.message || "Booking slot created.", "green", "✓");
+      setSlotForm({ title: "", slotDate: "" });
+      fetchRoomSlots(selectedRoom.id);
+    } catch {
+      setRoomSlotsError("Could not reach the slots API.");
+    } finally {
+      setSlotSubmitting(false);
+    }
+  };
 
   const deleteRoom = async (id) => {
   if (!confirm("Are you sure?")) return;
@@ -780,7 +1101,7 @@ export default function AdminDashboard() {
   const openCreateRoomModal = () => {
     setEditingRoomId(null);
     setRoomFormError("");
-    setNewRoomData({ name: '', capacity: '', description: '' });
+    setNewRoomData({ name: '', capacity: '', cost: '', description: '' });
     setShowRoomModal(true);
   };
 
@@ -790,6 +1111,7 @@ export default function AdminDashboard() {
     setEditRoomData({
       name: room.name,
       capacity: room.capacity,
+      cost: room.cost ?? room.price ?? room.pricePerDay ?? room.pricePerHour ?? room.amount ?? '',
       description: room.description || ''
     });
     setShowRoomModal(true);
@@ -818,20 +1140,102 @@ export default function AdminDashboard() {
   };
 
   // ── ADD BOOKING ──
-  const submitNewBooking = () => {
-    if (!newBooking.name || !newBooking.date || !newBooking.amount) {
-      addToast("Please fill all required fields", "red", "!");
+  const resetBookingDraft = () => ({
+    name: "",
+    userId: "",
+    room: "",
+    roomId: "",
+    roomCapacity: "",
+    date: "",
+    slot: "",
+    slotId: "",
+    amount: "",
+    payment: "pending",
+    numberOfAttendees: 1,
+  });
+
+  const closeBookingModal = () => {
+    setShowModal(false);
+    setNewBooking(resetBookingDraft());
+  };
+
+  const openBookingFromSlot = (slotContext) => {
+    setNewBooking((p) => ({
+      ...p,
+      room: slotContext.roomName || "",
+      roomId: slotContext.roomId || "",
+      roomCapacity: slotContext.roomCapacity || "",
+      slot: slotContext.slotTitle || "",
+      slotId: slotContext.slotId || "",
+      date: slotContext.isoDate || "",
+      amount: slotContext.cost || "",
+    }));
+    setShowModal(true);
+  };
+
+  const submitNewBooking = async () => {
+    if (!newBooking.userId || !newBooking.roomId || !newBooking.slotId || !newBooking.date || !newBooking.amount || !newBooking.numberOfAttendees) {
+      addToast("Client, slot, date, amount and attendees are required.", "red", "!");
       return;
     }
-    const colors = ["#6c63ff","#059669","#F07B2B","#3B82F6","#7C3AED","#EC4899"];
-    const id = "BK" + String(bookings.length + 1).padStart(3, "0");
-    const initials = newBooking.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
-    const color = colors[bookings.length % colors.length];
-    const roomIcon = newBooking.room === "Private Office" ? "🏛️" : newBooking.room === "Boardroom" ? "📋" : "⚖️";
-    setBookings(p => [{ id, initials, color, roomIcon, status: "pending", doc: false, ...newBooking, amount: Number(newBooking.amount) }, ...p]);
-    setShowModal(false);
-    setNewBooking({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
-    addToast(`Booking created for ${newBooking.name}`, "green", "📅");
+    const attendeeCount = Number(newBooking.numberOfAttendees);
+    const roomCapacity = Number(newBooking.roomCapacity);
+    if (Number.isFinite(roomCapacity) && roomCapacity > 0 && attendeeCount > roomCapacity) {
+      addToast(`Attendees cannot exceed room capacity (${roomCapacity}).`, "red", "!");
+      return;
+    }
+
+    if (!token) {
+      addToast("Authentication token is missing.", "red", "!");
+      return;
+    }
+
+    setBookingSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bookings/admin-user`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId: newBooking.roomId,
+          slotId: newBooking.slotId,
+          userId: newBooking.userId,
+          bookingDate: newBooking.date,
+          totalCost: Number(newBooking.amount),
+          numberOfAttendees: attendeeCount,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        addToast(data.message || "Failed to create booking.", "red", "✗");
+        return;
+      }
+
+      addToast(data.message || "Booking created successfully.", "green", "✓");
+      closeBookingModal();
+      setBookingsLoading(true);
+      const refresh = await fetch(`${API_BASE_URL}/api/bookings`, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const refreshData = await refresh.json().catch(() => ({}));
+      if (refresh.ok) {
+        const bookingList = Array.isArray(refreshData.bookings) ? refreshData.bookings : [];
+        setBookings(bookingList.map((item, idx) => mapApiBookingToDashboardBooking(item, idx)));
+      }
+    } catch {
+      addToast("Could not reach the bookings API.", "red", "✗");
+    } finally {
+      setBookingsLoading(false);
+      setBookingSubmitting(false);
+    }
   };
 
   // ── LEADS ──
@@ -854,31 +1258,102 @@ export default function AdminDashboard() {
     const matchSearch = b.name.toLowerCase().includes(search.toLowerCase()) || b.room.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
+  const filteredLeads = leads.filter(l => leadFilter === "all" || l.stage === leadFilter);
+  const selectedClientBookings = selectedClient?.id
+    ? bookings.filter((booking) => String(booking.userId || "") === String(selectedClient.id))
+    : [];
+  const memberUserOptions = users.filter((u) => String(u.role || "").toUpperCase() === "MEMBER");
 
   // ── STATS ──
   const totalRevenue = bookings.filter(b => b.payment === "paid").reduce((s, b) => s + b.amount, 0);
   const pendingCount = bookings.filter(b => b.status === "pending").length;
   const confirmedCount = bookings.filter(b => b.status === "confirmed").length;
+  const revenueByDay = Object.entries(
+    bookings.reduce((acc, booking) => {
+      if (!booking?.date) return acc;
+      const dayLabel = formatCalendarDayLabel(booking.date).split(" ")[0];
+      acc[dayLabel] = (acc[dayLabel] || 0) + Number(booking.amount || 0);
+      return acc;
+    }, {})
+  );
+  const topRoom = Object.entries(
+    bookings.reduce((acc, booking) => {
+      if (!booking?.room) return acc;
+      acc[booking.room] = (acc[booking.room] || 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1])[0];
 
   // ── CALENDAR DATA ──
+  const slotCalendarDates = allSlots
+    .map((slot) => {
+      if (!slot?.slotDate) return "";
+      const parsed = new Date(slot.slotDate);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+    })
+    .filter(Boolean);
+  const bookingCalendarDates = bookings.map((b) => b.date).filter(Boolean);
+  const calendarIsoDates = Array.from(new Set([...slotCalendarDates, ...bookingCalendarDates])).sort();
+  const calendarDays = calendarIsoDates.map((isoDate) => ({
+    isoDate,
+    label: formatCalendarDayLabel(isoDate),
+  }));
+  const slotTitlesFromApi = allSlots
+    .map((slot) => (typeof slot?.title === "string" ? slot.title.trim() : ""))
+    .filter(Boolean);
+  const bookingSlotTitles = bookings
+    .map((b) => (typeof b.slot === "string" ? b.slot.trim() : ""))
+    .filter((slot) => slot && slot !== "N/A");
+  const calendarSlots = Array.from(new Set([...slotTitlesFromApi, ...bookingSlotTitles]));
+  const slotRooms = allSlots
+    .map((slot) => slot?.room?.name || "")
+    .filter(Boolean);
+  const bookingRooms = bookings.map((b) => b.room).filter(Boolean);
+  const calendarRooms = Array.from(new Set([...slotRooms, ...bookingRooms]));
+
   const calendarData = {};
-  bookings.forEach(b => {
-    SLOTS.forEach(slot => {
-      ROOMS.forEach(room => {
-        const key = `${b.date}-${slot}-${room}`;
-        if (b.slot === slot && b.room === room && (b.status === "confirmed" || b.status === "pending")) {
-          calendarData[key] = { name: b.name.split(" ")[1] || b.name.split(" ")[0], status: b.status };
-        }
-      });
-    });
+  allSlots.forEach((slot) => {
+    const title = typeof slot?.title === "string" ? slot.title.trim() : "";
+    const roomName = slot?.room?.name || "";
+    if (!title || !roomName || !slot?.slotDate) return;
+    const parsed = new Date(slot.slotDate);
+    if (Number.isNaN(parsed.getTime())) return;
+    const isoDate = parsed.toISOString().slice(0, 10);
+    const key = `${isoDate}-${title}-${roomName}`;
+    const rawCost = slot?.cost ?? slot?.room?.cost ?? slot?.room?.price ?? slot?.room?.amount;
+    const normalizedCost = Number(rawCost);
+    const normalizedCapacity = Number(slot?.room?.capacity);
+    calendarData[key] = {
+      type: slot.booked ? "booked" : "available",
+      bookingId: null,
+      name: "Reserved",
+      status: slot.booked ? "confirmed" : "available",
+      slotId: slot?.id || "",
+      roomId: slot?.roomId || slot?.room?.id || "",
+      roomName,
+      slotTitle: title,
+      isoDate,
+      cost: Number.isFinite(normalizedCost) ? normalizedCost : "",
+      roomCapacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : "",
+    };
   });
 
-  const getCalSlot = (day, slot, room) => {
-    const dateMap = { "Mon 30 Mar":"2026-03-30","Tue 31 Mar":"2026-03-31","Wed 1 Apr":"2026-04-01","Thu 2 Apr":"2026-04-02","Fri 3 Apr":"2026-04-03" };
-    const key = `${dateMap[day]}-${slot}-${room}`;
-    if (calendarData[key]) return { type: "booked", ...calendarData[key] };
-    if (slot === "5pm–8pm" && room === "Combined") return { type: "blocked" };
-    return { type: "available" };
+  bookings.forEach((b) => {
+    if (!b.date || !b.slot || b.slot === "N/A") return;
+    if (b.status !== "confirmed" && b.status !== "pending") return;
+    const key = `${b.date}-${b.slot}-${b.room}`;
+    calendarData[key] = {
+      type: "booked",
+      name: b.name.split(" ")[1] || b.name.split(" ")[0],
+      status: b.status,
+      bookingId: b.id,
+    };
+  });
+
+  const getCalSlot = (isoDate, slot, room) => {
+    const key = `${isoDate}-${slot}-${room}`;
+    if (calendarData[key]) return calendarData[key];
+    return { type: "unavailable" };
   };
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
@@ -966,6 +1441,7 @@ export default function AdminDashboard() {
                 {activeNav === "leads"         && "Lead Pipeline"}
                 {activeNav === "notifications" && "Notifications"}
                 {activeNav === "analytics"     && "Analytics"}
+                {activeNav === "room-details"  && "Room Details"}
               </h1>
               <p>DR Hub Admin · Wednesday, 1 April 2026</p>
               </div>
@@ -976,7 +1452,6 @@ export default function AdminDashboard() {
                 🔔<span className="dh-notif-dot"></span>
               </div>
               <button className="dh-btn-primary" onClick={logout}>Logout</button>
-              <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
             </div>
           </header>
 
@@ -1072,34 +1547,52 @@ export default function AdminDashboard() {
                       <button className="dh-panel-link" onClick={() => pickNav("calendar")}>Full view →</button>
                     </div>
                     <div className="dh-cal">
-                      <div className="dh-cal-hd">
-                        <div className="dh-cal-hd-item"></div>
-                        {ROOMS.map(r => <div key={r} className="dh-cal-hd-item">{r.split(" ")[0]}</div>)}
-                      </div>
-                      {["Wed 1 Apr","Thu 2 Apr"].map(day =>
-                        SLOTS.map(slot => {
-                          const daySlot = `${day} ${slot}`;
-                          return (
-                            <div key={daySlot} className="dh-cal-row">
-                              <div className="dh-cal-time">{day.split(" ")[0]}<br/>{slot}</div>
-                              {ROOMS.map(room => {
-                                const s = getCalSlot(day, slot, room);
-                                return (
-                                  <div key={room} className={`dh-cal-slot cal-${s.type}`} onClick={() => s.type === "booked" && addToast(`${s.name} — ${room} ${slot}`, "orange", "📋")}>
-                                    <div style={{fontSize:10,fontWeight:700}}>{s.type === "booked" ? s.name : s.type === "available" ? "Free" : "Blocked"}</div>
-                                    {s.type === "booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })
+                      {calendarDays.length === 0 || calendarSlots.length === 0 || calendarRooms.length === 0 ? (
+                        <div className="dh-empty" style={{ margin: "12px 0" }}>No calendar slot data available from backend</div>
+                      ) : (
+                        <>
+                          <div className="dh-cal-hd" style={{ gridTemplateColumns: `70px repeat(${calendarRooms.length}, 1fr)` }}>
+                            <div className="dh-cal-hd-item"></div>
+                            {calendarRooms.map(r => <div key={r} className="dh-cal-hd-item">{r.split(" ")[0]}</div>)}
+                          </div>
+                          {calendarDays.slice(0, 2).map(day =>
+                            calendarSlots.map(slot => {
+                              const daySlot = `${day.isoDate} ${slot}`;
+                              return (
+                                <div key={daySlot} className="dh-cal-row" style={{ gridTemplateColumns: `70px repeat(${calendarRooms.length}, 1fr)` }}>
+                                  <div className="dh-cal-time">{day.label.split(" ")[0]}<br/>{slot}</div>
+                                  {calendarRooms.map(room => {
+                                    const s = getCalSlot(day.isoDate, slot, room);
+                                    return (
+                                      <div
+                                        key={room}
+                                        className={`dh-cal-slot cal-${s.type}`}
+                                        onClick={() => {
+                                          if (s.type === "booked") {
+                                            addToast(`${s.name} — ${room} ${slot}`, "orange", "📋");
+                                            return;
+                                          }
+                                          if (s.type === "available") {
+                                            openBookingFromSlot(s);
+                                          }
+                                        }}
+                                      >
+                                        <div style={{fontSize:10,fontWeight:700}}>{s.type === "booked" ? s.name : s.type === "available" ? "Free" : "—"}</div>
+                                        {s.type === "booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })
+                          )}
+                          <div className="dh-cal-legend">
+                            {[["cal-booked","Booked"],["cal-available","Available"]].map(([cls,lbl]) => (
+                              <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
+                            ))}
+                          </div>
+                        </>
                       )}
-                      <div className="dh-cal-legend">
-                        {[["cal-booked","Booked"],["cal-available","Available"],["cal-blocked","Blocked"]].map(([cls,lbl]) => (
-                          <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1188,16 +1681,6 @@ export default function AdminDashboard() {
                         <div className="dh-alert-time">Today</div>
                       </div>
                     ))}
-                    {bookings.filter(b=>!b.doc).map(b => (
-                      <div key={b.id} className="dh-alert-item">
-                        <div className="dh-alert-icon" style={{background:"rgba(239,68,68,0.12)"}}>📄</div>
-                        <div>
-                          <div className="dh-alert-title">Missing Document</div>
-                          <div className="dh-alert-desc">{b.name} — qualification proof not uploaded</div>
-                        </div>
-                        <div className="dh-alert-time">Today</div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </>
@@ -1209,9 +1692,13 @@ export default function AdminDashboard() {
                 <div className="dh-panel-hd">
                   <div>
                     <div className="dh-panel-title">All Bookings</div>
-                    <div className="dh-panel-sub">{filteredBookings.length} of {bookings.length} shown</div>
+                    <div className="dh-panel-sub">
+                      {bookingsLoading ? "Loading bookings..." : `${filteredBookings.length} of ${bookings.length} shown`}
+                    </div>
+                    {!bookingsLoading && bookingsError && (
+                      <div className="dh-panel-sub" style={{ color: "#fca5a5" }}>{bookingsError}</div>
+                    )}
                   </div>
-                  <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
                 </div>
                 <div className="dh-filter-bar">
                   {["all","pending","confirmed","rejected","completed"].map(f => (
@@ -1225,11 +1712,11 @@ export default function AdminDashboard() {
                 <div className="dh-table-wrap">
                   <table className="dh-table">
                     <thead><tr>
-                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Payment</th><th>Doc</th><th>Status</th><th>Actions</th>
+                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Payment</th><th>Status</th><th>Actions</th>
                     </tr></thead>
                     <tbody>
                       {filteredBookings.length === 0 && (
-                        <tr><td colSpan={10}><div className="dh-empty">No bookings match this filter</div></td></tr>
+                        <tr><td colSpan={9}><div className="dh-empty">No bookings match this filter</div></td></tr>
                       )}
                       {filteredBookings.map(b => (
                         <tr key={b.id} onClick={() => setViewBooking(b)}>
@@ -1240,7 +1727,6 @@ export default function AdminDashboard() {
                           <td><span className="dh-slot-badge">{b.slot}</span></td>
                           <td><span className="dh-amount">{b.amount.toLocaleString()}</span></td>
                           <td><span className={`dh-status ${b.payment==="paid"?"s-confirmed":"s-pending"}`}>{b.payment}</span></td>
-                          <td style={{textAlign:"center"}}>{b.doc ? "✅" : "❌"}</td>
                           <td><StatusBadge status={b.status}/></td>
                           <td onClick={e => e.stopPropagation()}>
                             <div className="dh-actions">
@@ -1271,40 +1757,50 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div style={{padding:"16px 20px",overflowX:"auto"}}>
-                  <div style={{display:"grid",gridTemplateColumns:`80px repeat(${ROOMS.length},1fr)`,gap:6,minWidth:600,marginBottom:8}}>
-                    <div></div>
-                    {ROOMS.map(r => <div key={r} style={{fontSize:11,fontWeight:700,color:"#F07B2B",textAlign:"center",padding:8,background:"rgba(240,123,43,0.08)",borderRadius:6}}>{r}</div>)}
-                  </div>
-                  {DAYS.map(day => (
-                    <div key={day}>
-                      <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#888",fontWeight:600,padding:"12px 0 6px"}}>{day}</div>
-                      {SLOTS.map(slot => (
-                        <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${ROOMS.length},1fr)`,gap:6,minWidth:600,marginBottom:6}}>
-                          <div style={{fontSize:10,color:"#888",fontWeight:500,display:"flex",alignItems:"center"}}>{slot}</div>
-                          {ROOMS.map(room => {
-                            const s = getCalSlot(day, slot, room);
-                            return (
-                              <div key={room} className={`dh-cal-slot cal-${s.type}`}
-                                onClick={() => {
-                                  if (s.type === "booked") {
-                                    const b = bookings.find(bk => bk.name.includes(s.name) && bk.slot === slot && bk.room === room);
-                                    if (b) setViewBooking(b);
-                                  }
-                                }}>
-                                <div style={{fontSize:11,fontWeight:700}}>{s.type==="booked" ? s.name : s.type==="available" ? "Available" : "Blocked"}</div>
-                                {s.type==="booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
-                              </div>
-                            );
-                          })}
+                  {calendarDays.length === 0 || calendarSlots.length === 0 || calendarRooms.length === 0 ? (
+                    <div className="dh-empty">No calendar slot data available from backend</div>
+                  ) : (
+                    <>
+                      <div style={{display:"grid",gridTemplateColumns:`80px repeat(${calendarRooms.length},1fr)`,gap:6,minWidth:600,marginBottom:8}}>
+                        <div></div>
+                        {calendarRooms.map(r => <div key={r} style={{fontSize:11,fontWeight:700,color:"#F07B2B",textAlign:"center",padding:8,background:"rgba(240,123,43,0.08)",borderRadius:6}}>{r}</div>)}
+                      </div>
+                      {calendarDays.map(day => (
+                        <div key={day.isoDate}>
+                          <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#888",fontWeight:600,padding:"12px 0 6px"}}>{day.label}</div>
+                          {calendarSlots.map(slot => (
+                            <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${calendarRooms.length},1fr)`,gap:6,minWidth:600,marginBottom:6}}>
+                              <div style={{fontSize:10,color:"#888",fontWeight:500,display:"flex",alignItems:"center"}}>{slot}</div>
+                              {calendarRooms.map(room => {
+                                const s = getCalSlot(day.isoDate, slot, room);
+                                return (
+                                  <div key={room} className={`dh-cal-slot cal-${s.type}`}
+                                    onClick={() => {
+                                      if (s.type === "booked") {
+                                        const b = bookings.find((bk) => bk.id === s.bookingId);
+                                        if (b) setViewBooking(b);
+                                        return;
+                                      }
+                                      if (s.type === "available") {
+                                        openBookingFromSlot(s);
+                                      }
+                                    }}>
+                                    <div style={{fontSize:11,fontWeight:700}}>{s.type==="booked" ? s.name : s.type==="available" ? "Available" : "—"}</div>
+                                    {s.type==="booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
                       ))}
-                    </div>
-                  ))}
-                  <div className="dh-cal-legend" style={{marginTop:16}}>
-                    {[["cal-booked","Booked"],["cal-available","Available"],["cal-blocked","Blocked"]].map(([cls,lbl]) => (
-                      <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
-                    ))}
-                  </div>
+                      <div className="dh-cal-legend" style={{marginTop:16}}>
+                        {[["cal-booked","Booked"],["cal-available","Available"]].map(([cls,lbl]) => (
+                          <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1487,13 +1983,16 @@ export default function AdminDashboard() {
                         <tr><th>ID</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Status</th></tr>
                       </thead>
                       <tbody>
-                        {DUMMY_CLIENT_BOOKINGS.map((booking) => (
+                        {selectedClientBookings.length === 0 && (
+                          <tr><td colSpan={6}><div className="dh-empty">No bookings found for this client</div></td></tr>
+                        )}
+                        {selectedClientBookings.map((booking) => (
                           <tr key={booking.id}>
                             <td style={{ color: "#888", fontSize: 11 }}>{booking.id}</td>
                             <td>{booking.room}</td>
-                            <td style={{ color: "#888", fontSize: 11 }}>{booking.date}</td>
-                            <td>{booking.slot}</td>
-                            <td><span className="dh-amount">{booking.amount.toLocaleString()}</span></td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{booking.date || "-"}</td>
+                            <td>{booking.slot || "-"}</td>
+                            <td><span className="dh-amount">{Number(booking.amount || 0).toLocaleString()}</span></td>
                             <td><StatusBadge status={booking.status} /></td>
                           </tr>
                         ))}
@@ -1609,6 +2108,7 @@ export default function AdminDashboard() {
           <tr>
             <th>Room</th>
             <th>Capacity</th>
+            <th>Cost</th>
             <th>Description</th>
             <th>Status</th>
             <th>Actions</th>
@@ -1617,7 +2117,7 @@ export default function AdminDashboard() {
         <tbody>
           {roomsLoading && (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <div className="dh-empty">Loading rooms...</div>
               </td>
             </tr>
@@ -1632,7 +2132,7 @@ export default function AdminDashboard() {
               );
             }).length === 0 && (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <div className="dh-empty">No rooms found. Try another search or add a new room.</div>
               </td>
             </tr>
@@ -1650,14 +2150,25 @@ export default function AdminDashboard() {
               <tr key={room.id}>
                 <td style={{ fontWeight: 600 }}>{room.name || "-"}</td>
                 <td>{room.capacity || "-"}</td>
+                <td>
+                  {(() => {
+                    const rawCost = room.cost ?? room.price ?? room.pricePerDay ?? room.pricePerHour ?? room.amount;
+                    const numericCost = Number(rawCost);
+                    if (Number.isFinite(numericCost) && String(rawCost).trim() !== "") {
+                      return `Ksh ${numericCost.toLocaleString()}`;
+                    }
+                    return rawCost ? String(rawCost) : "-";
+                  })()}
+                </td>
                 <td>{room.description || "No description"}</td>
                 <td>
-                  <span className={`dh-status ${room.is_active ? 's-confirmed' : 's-rejected'}`}>
-                    {room.is_active ? 'Active' : 'Inactive'}
+                  <span className={`dh-status ${room.isActive ? 's-confirmed' : 's-rejected'}`}>
+                    {room.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
                 <td>
                   <div style={{ display: "flex", gap: 8 }}>
+                    <button className="dh-action-btn btn-view" onClick={() => openRoomDetails(room)}>Details</button>
                     <button className="dh-action-btn btn-view" onClick={() => startEditRoom(room)}>Edit</button>
                     <button className="dh-action-btn btn-reject" onClick={() => deleteRoom(room.id)}>Delete</button>
                   </div>
@@ -1666,6 +2177,126 @@ export default function AdminDashboard() {
             ))}
         </tbody>
       </table>
+    </div>
+  </div>
+)}
+
+{activeNav === "room-details" && selectedRoom && (
+  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div>
+          <div className="dh-panel-title">{selectedRoom.name || "Room"}</div>
+          <div className="dh-panel-sub">Room information and booking slots</div>
+        </div>
+        <button className="dh-btn-primary" onClick={() => setActiveNav("rooms")}>← Back to Rooms</button>
+      </div>
+      <div className="dh-table-wrap">
+        <table className="dh-table">
+          <thead>
+            <tr>
+              <th>Room</th>
+              <th>Capacity</th>
+              <th>Cost</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ fontWeight: 600 }}>{selectedRoom.name || "-"}</td>
+              <td>{selectedRoom.capacity || "-"}</td>
+              <td>
+                {(() => {
+                  const rawCost = selectedRoom.cost ?? selectedRoom.price ?? selectedRoom.pricePerDay ?? selectedRoom.pricePerHour ?? selectedRoom.amount;
+                  const numericCost = Number(rawCost);
+                  if (Number.isFinite(numericCost) && String(rawCost).trim() !== "") return `Ksh ${numericCost.toLocaleString()}`;
+                  return rawCost ? String(rawCost) : "-";
+                })()}
+              </td>
+              <td>
+                <span className={`dh-status ${selectedRoom.isActive ? 's-confirmed' : 's-rejected'}`}>
+                  {selectedRoom.isActive ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td>{selectedRoom.description || "No description"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div>
+          <div className="dh-panel-title">Create Booking Slot</div>
+          <div className="dh-panel-sub">Add a named slot for a selected date</div>
+        </div>
+      </div>
+      <div className="dh-modal-body">
+        <div className="dh-form-row">
+          <div className="dh-form-group">
+            <label>Slot Title *</label>
+            <input
+              type="text"
+              placeholder="e.g. 9am - 11am"
+              value={slotForm.title}
+              onChange={(e) => setSlotForm((p) => ({ ...p, title: e.target.value }))}
+            />
+          </div>
+          <div className="dh-form-group">
+            <label>Slot Date *</label>
+            <input
+              type="date"
+              value={slotForm.slotDate}
+              onChange={(e) => setSlotForm((p) => ({ ...p, slotDate: e.target.value }))}
+            />
+          </div>
+        </div>
+        {roomSlotsError && <div style={{ color: "#ffb4b4", fontSize: 12 }}>{roomSlotsError}</div>}
+      </div>
+      <div className="dh-modal-ft">
+        <button className="dh-btn-primary" onClick={createRoomSlot} disabled={slotSubmitting}>
+          {slotSubmitting ? "Saving..." : "Create Slot"}
+        </button>
+      </div>
+    </div>
+
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div className="dh-panel-title">Room Booking Slots</div>
+        <button className="dh-btn-primary" onClick={() => fetchRoomSlots(selectedRoom.id)}>Refresh Slots</button>
+      </div>
+      <div className="dh-table-wrap">
+        <table className="dh-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Slot Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roomSlotsLoading && (
+              <tr>
+                <td colSpan={3}><div className="dh-empty">Loading slots...</div></td>
+              </tr>
+            )}
+            {!roomSlotsLoading && roomSlots.length === 0 && (
+              <tr>
+                <td colSpan={3}><div className="dh-empty">No slots created for this room yet.</div></td>
+              </tr>
+            )}
+            {!roomSlotsLoading && roomSlots.map((slot) => (
+              <tr key={slot.id || `${slot.title || "slot"}-${slot.slotDate || ""}`}>
+                <td>{slot.title || "-"}</td>
+                <td>{slot.slotDate ? new Date(slot.slotDate).toLocaleDateString() : "-"}</td>
+                <td>{slot.booked ? "Booked" : "Available"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 )}
@@ -1711,9 +2342,21 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {leads
-                        .filter(l => leadFilter === "all" || l.stage === leadFilter)
-                        .map((lead) => (
+                      {leadsLoading && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">Loading leads...</div>
+                          </td>
+                        </tr>
+                      )}
+                      {!leadsLoading && leadsError && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">{leadsError}</div>
+                          </td>
+                        </tr>
+                      )}
+                      {!leadsLoading && !leadsError && filteredLeads.map((lead) => (
                           <tr key={lead.id}>
                             <td>
                               <div className="dh-client-cell">
@@ -1757,6 +2400,13 @@ export default function AdminDashboard() {
                                   </button>
                                 )}
                                 <button
+                                  className="dh-action-btn btn-view"
+                                  onClick={() => setViewLead(lead)}
+                                  title="View lead details"
+                                >
+                                  👁 View
+                                </button>
+                                <button
                                   className="dh-action-btn btn-reject"
                                   onClick={() => {
                                     if (confirm(`Remove ${lead.name} from leads?`)) {
@@ -1772,7 +2422,7 @@ export default function AdminDashboard() {
                             </td>
                           </tr>
                         ))}
-                      {leads.filter(l => leadFilter === "all" || l.stage === leadFilter).length === 0 && (
+                      {!leadsLoading && !leadsError && filteredLeads.length === 0 && (
                         <tr>
                           <td colSpan={6}>
                             <div className="dh-empty">No leads found. Click "+ Add Lead" to get started.</div>
@@ -1815,16 +2465,6 @@ export default function AdminDashboard() {
                     <div className="dh-alert-time">Today</div>
                   </div>
                 ))}
-                {bookings.filter(b=>!b.doc).map(b => (
-                  <div key={`doc-${b.id}`} className="dh-alert-item">
-                    <div className="dh-alert-icon" style={{background:"rgba(239,68,68,0.12)"}}>📄</div>
-                    <div>
-                      <div className="dh-alert-title">Missing Qualification Document — {b.name}</div>
-                      <div className="dh-alert-desc">Client has not uploaded proof of professional qualification</div>
-                    </div>
-                    <div className="dh-alert-time">Today</div>
-                  </div>
-                ))}
               </div>
             )}
 
@@ -1857,23 +2497,27 @@ export default function AdminDashboard() {
                   <div className="dh-panel">
                     <div className="dh-panel-hd"><div className="dh-panel-title">Revenue by Day</div></div>
                     <div style={{padding:"20px 20px 10px"}}>
-                      <div className="dh-bars" style={{height:140}}>
-                        {[["Mon",45000],["Tue",70000],["Wed",90000],["Thu",55000],["Fri",65000],["Sat",30000]].map(([d,v]) => (
-                          <div key={d} className="dh-bar-grp">
-                            <div style={{fontSize:10,color:"#888",marginBottom:4}}>Ksh {(v/1000).toFixed(0)}k</div>
-                            <div className="dh-bar" style={{height:`${v/1000}%`,background:`rgba(240,123,43,${0.3+v/300000})`}}></div>
-                            <div className="dh-bar-lbl">{d}</div>
-                          </div>
-                        ))}
-                      </div>
+                      {revenueByDay.length === 0 ? (
+                        <div className="dh-empty">No revenue data from bookings yet</div>
+                      ) : (
+                        <div className="dh-bars" style={{height:140}}>
+                          {revenueByDay.map(([d,v]) => (
+                            <div key={d} className="dh-bar-grp">
+                              <div style={{fontSize:10,color:"#888",marginBottom:4}}>Ksh {(v/1000).toFixed(0)}k</div>
+                              <div className="dh-bar" style={{height:`${Math.max(8, v/1000)}%`,background:`rgba(240,123,43,${0.3+v/300000})`}}></div>
+                              <div className="dh-bar-lbl">{d}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="dh-panel">
                     <div className="dh-panel-hd"><div className="dh-panel-title">Bookings by Room</div></div>
                     <div style={{padding:20,display:"flex",flexDirection:"column",gap:16}}>
-                      {ROOMS.map((room,i) => {
+                      {calendarRooms.map((room,i) => {
                         const count = bookings.filter(b=>b.room===room).length;
-                        const pct = Math.round((count/bookings.length)*100);
+                        const pct = bookings.length ? Math.round((count/bookings.length)*100) : 0;
                         const colors = ["#F07B2B","#3B82F6","#22C55E"];
                         return (
                           <div key={room}>
@@ -1891,7 +2535,11 @@ export default function AdminDashboard() {
                     <div style={{padding:"0 20px 20px"}}>
                       <div style={{background:"rgba(240,123,43,0.08)",border:"1px solid rgba(240,123,43,0.15)",borderRadius:8,padding:14}}>
                         <div style={{fontSize:11,color:"#F07B2B",fontWeight:700,marginBottom:4}}>💡 Insight</div>
-                        <div style={{fontSize:12,color:"#888",lineHeight:1.6}}>Private Office is the most in-demand space. Consider adding capacity or increasing the rate.</div>
+                        <div style={{fontSize:12,color:"#888",lineHeight:1.6}}>
+                          {topRoom
+                            ? `${topRoom[0]} currently leads with ${topRoom[1]} booking${topRoom[1] === 1 ? "" : "s"}.`
+                            : "No booking volume insight yet. Create or fetch bookings to populate this panel."}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1902,15 +2550,58 @@ export default function AdminDashboard() {
           </div>
         </main>
 
+{/* ── VIEW LEAD MODAL ── */}
+        {viewLead && (
+          <div className="dh-modal-overlay" onClick={() => setViewLead(null)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Lead Details</div>
+                <button className="dh-modal-close" onClick={() => setViewLead(null)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-group">
+                  <label>Full Name</label>
+                  <div>{viewLead.name || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Email Address</label>
+                  <div>{viewLead.email || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Phone Number</label>
+                  <div>{viewLead.phone || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Lead Stage</label>
+                  <div>{viewLead.stage === "follow-up" ? "Follow Up" : String(viewLead.stage || "new").charAt(0).toUpperCase() + String(viewLead.stage || "new").slice(1)}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Message / Notes</label>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{viewLead.note || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Created</label>
+                  <div>{viewLead.createdAt ? new Date(viewLead.createdAt).toLocaleString() : "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Lead ID</label>
+                  <div style={{ wordBreak: "break-all", color: "#888", fontSize: 12 }}>{String(viewLead.id || "—")}</div>
+                </div>
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setViewLead(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
  {/* ── CAPTURE LEAD MODAL ── */}
         {showLeadModal && (
           <div className="dh-modal-overlay" onClick={() => setShowLeadModal(false)}>
             <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="dh-modal-hd" style={{ background: "linear-gradient(135deg, #F07B2B 0%, #FF8C42 100%)" }}>
-                <div className="dh-modal-title" style={{ color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "20px" }}>🎯</span> Capture New Lead
-                </div>
-                <button className="dh-modal-close" onClick={() => setShowLeadModal(false)} style={{ color: "#fff" }}>✕</button>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Capture Lead</div>
+                <button className="dh-modal-close" onClick={() => setShowLeadModal(false)}>✕</button>
               </div>
               <form
                 onSubmit={async (e) => {
@@ -1919,84 +2610,114 @@ export default function AdminDashboard() {
                     addToast("Lead name is required", "red", "!");
                     return;
                   }
+                  if (!token) {
+                    addToast("Authentication token is missing", "red", "!");
+                    return;
+                  }
                   setLeadSubmitting(true);
-                  const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
-                  const newLead = {
-                    id: Date.now(),
-                    name: newLeadData.name,
-                    initials: newLeadData.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
-                    color: randomColor,
-                    stage: newLeadData.stage,
-                    phone: newLeadData.phone || "",
-                    email: newLeadData.email || "",
-                    note: newLeadData.notes || "",
-                    createdAt: new Date().toISOString()
-                  };
-                  setLeads(prev => [...prev, newLead]);
-                  addToast(`${newLeadData.name} added to pipeline!`, "green", "✓");
-                  setShowLeadModal(false);
-                  setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
-                  setLeadSubmitting(false);
+                  try {
+                    const response = await fetch(`${API_BASE_URL}/api/contact`, {
+                      method: "POST",
+                      headers: {
+                        Accept: "*/*",
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        fullName: newLeadData.name.trim(),
+                        email: newLeadData.email.trim(),
+                        phoneNumber: newLeadData.phone.trim(),
+                        message: newLeadData.notes.trim(),
+                      }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                      addToast(data.message || "Failed to capture lead", "red", "!");
+                      return;
+                    }
+
+                    const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
+                    const createdLead =
+                      (data && typeof data.contact === "object" && data.contact) ||
+                      (data && typeof data.lead === "object" && data.lead) ||
+                      (data && typeof data.data === "object" && data.data) ||
+                      {};
+                    const leadName = createdLead.fullName || newLeadData.name.trim();
+                    const leadPhone =
+                      typeof createdLead.phoneNumber === "string"
+                        ? createdLead.phoneNumber.trim()
+                        : newLeadData.phone.trim();
+
+                    setLeads(prev => [
+                      {
+                        id: createdLead.id || Date.now(),
+                        name: leadName,
+                        initials: getInitials(leadName),
+                        color: randomColor,
+                        stage: newLeadData.stage,
+                        phone: leadPhone,
+                        email: createdLead.email || newLeadData.email.trim(),
+                        note: createdLead.message || newLeadData.notes.trim(),
+                        createdAt: createdLead.createdAt || new Date().toISOString(),
+                      },
+                      ...prev,
+                    ]);
+
+                    addToast(data.message || `${leadName} added to pipeline!`, "green", "✓");
+                    setShowLeadModal(false);
+                    setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
+                  } catch {
+                    addToast("Could not reach the leads API.", "red", "!");
+                  } finally {
+                    setLeadSubmitting(false);
+                  }
                 }}
               >
                 <div className="dh-modal-body">
+                  <div style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
+                    Save a new contact message into the leads pipeline.
+                  </div>
                   <div className="dh-form-row">
                     <div className="dh-form-group">
-                      <label style={{ color: "#F07B2B" }}>Full Name *</label>
+                      <label>Full Name *</label>
                       <input
                         type="text"
-                        placeholder="e.g. John Mwangi"
+                        placeholder="John Doe"
                         value={newLeadData.name}
                         onChange={(e) => setNewLeadData({ ...newLeadData, name: e.target.value })}
                         required
-                        style={{ borderLeft: "3px solid #F07B2B" }}
                       />
                     </div>
                     <div className="dh-form-group">
-                      <label style={{ color: "#22C55E" }}>Phone Number</label>
+                      <label>Phone Number</label>
                       <input
                         type="tel"
-                        placeholder="+254 XXX XXX XXX"
+                        placeholder="07454491093"
                         value={newLeadData.phone}
                         onChange={(e) => setNewLeadData({ ...newLeadData, phone: e.target.value })}
-                        style={{ borderLeft: "3px solid #22C55E" }}
                       />
-                    </div>
-                  </div>
-
-                  <div className="dh-form-row">
-                    <div className="dh-form-group">
-                      <label style={{ color: "#3B82F6" }}>Email Address</label>
-                      <input
-                        type="email"
-                        placeholder="client@example.com"
-                        value={newLeadData.email}
-                        onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })}
-                        style={{ borderLeft: "3px solid #3B82F6" }}
-                      />
-                    </div>
-                    <div className="dh-form-group">
-                      <label style={{ color: "#F59E0B" }}>Lead Stage</label>
-                      <select
-                        value={newLeadData.stage}
-                        onChange={(e) => setNewLeadData({ ...newLeadData, stage: e.target.value })}
-                        style={{ borderLeft: "3px solid #F59E0B" }}
-                      >
-                        <option value="new">🟢 New Lead</option>
-                        <option value="follow-up">🟡 Follow-up</option>
-                        <option value="converted">🔵 Converted</option>
-                      </select>
                     </div>
                   </div>
 
                   <div className="dh-form-group">
-                    <label style={{ color: "#888" }}>📝 Notes / Comments</label>
+                    <label>Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="johndoe@gmail.com"
+                      value={newLeadData.email}
+                      onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="dh-form-group">
+                    <label>Message</label>
                     <textarea
                       rows="3"
-                      placeholder="Additional information about this lead..."
+                      placeholder="Testing the API"
                       value={newLeadData.notes}
                       onChange={(e) => setNewLeadData({ ...newLeadData, notes: e.target.value })}
-                      style={{ resize: "vertical", borderLeft: "3px solid #F07B2B" }}
+                      style={{ resize: "vertical" }}
                     />
                   </div>
                 </div>
@@ -2013,11 +2734,10 @@ export default function AdminDashboard() {
                   </button>
                   <button 
                     type="submit" 
-                    className="dh-btn-primary" 
+                    className="dh-btn-primary"
                     disabled={leadSubmitting}
-                    style={{ background: "linear-gradient(135deg, #F07B2B 0%, #FF8C42 100%)" }}
                   >
-                    {leadSubmitting ? "Adding..." : "➕ Add Lead"}
+                    {leadSubmitting ? "Saving..." : "Save Lead"}
                   </button>
                 </div>
               </form>
@@ -2050,7 +2770,6 @@ export default function AdminDashboard() {
                   ["Time Slot",   viewBooking.slot],
                   ["Amount",      `Ksh ${viewBooking.amount.toLocaleString()}`],
                   ["Payment",     viewBooking.payment],
-                  ["Document",    viewBooking.doc ? "✅ Uploaded" : "❌ Missing"],
                 ].map(([k,v]) => (
                   <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
                     <span style={{fontSize:12,color:"#888"}}>{k}</span>
@@ -2072,57 +2791,86 @@ export default function AdminDashboard() {
 
         {/* ── NEW BOOKING MODAL ── */}
         {showModal && (
-          <div className="dh-modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="dh-modal-overlay" onClick={closeBookingModal}>
             <div className="dh-modal" onClick={e => e.stopPropagation()}>
               <div className="dh-modal-hd">
                 <div className="dh-modal-title">New Booking</div>
-                <button className="dh-modal-close" onClick={() => setShowModal(false)}>✕</button>
+                <button className="dh-modal-close" onClick={closeBookingModal}>✕</button>
               </div>
               <div className="dh-modal-body">
                 <div className="dh-form-row">
                   <div className="dh-form-group">
-                    <label>Client Name *</label>
-                    <input placeholder="Jane Mwangi" value={newBooking.name} onChange={e => setNewBooking(p=>({...p,name:e.target.value}))}/>
+                    <label>Client *</label>
+                    <select
+                      value={newBooking.userId}
+                      onChange={(e) => {
+                        const selectedUser = memberUserOptions.find((u) => String(u.id) === String(e.target.value));
+                        setNewBooking((p) => ({
+                          ...p,
+                          userId: e.target.value,
+                          name: selectedUser?.name || "",
+                        }));
+                      }}
+                    >
+                      <option value="">Select client</option>
+                      {memberUserOptions.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name || member.email || member.id}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="dh-form-group">
-                    <label>Client Type</label>
-                    <select value={newBooking.type} onChange={e => setNewBooking(p=>({...p,type:e.target.value}))}>
-                      <option>ADR Practitioner</option>
-                      <option>Young Advocate</option>
-                      <option>DR Hub Member</option>
-                    </select>
+                    <label>Number of Attendees *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={newBooking.roomCapacity || undefined}
+                      value={newBooking.numberOfAttendees}
+                      onChange={(e) => setNewBooking((p) => ({ ...p, numberOfAttendees: e.target.value }))}
+                    />
                   </div>
                 </div>
                 <div className="dh-form-row">
                   <div className="dh-form-group">
                     <label>Room</label>
-                    <select value={newBooking.room} onChange={e => setNewBooking(p=>({...p,room:e.target.value}))}>
-                      <option>Private Office</option>
-                      <option>Boardroom</option>
-                      <option>Combined</option>
-                    </select>
+                    <input value={newBooking.room || "-"} readOnly />
                   </div>
                   <div className="dh-form-group">
                     <label>Time Slot</label>
-                    <select value={newBooking.slot} onChange={e => setNewBooking(p=>({...p,slot:e.target.value}))}>
-                      {SLOTS.map(s => <option key={s}>{s}</option>)}
-                    </select>
+                    <input value={newBooking.slot || "-"} readOnly />
                   </div>
                 </div>
                 <div className="dh-form-row">
                   <div className="dh-form-group">
-                    <label>Date *</label>
-                    <input type="date" value={newBooking.date} onChange={e => setNewBooking(p=>({...p,date:e.target.value}))}/>
+                    <label>Date</label>
+                    <input value={newBooking.date || "-"} readOnly />
                   </div>
                   <div className="dh-form-group">
-                    <label>Amount (Ksh) *</label>
-                    <input type="number" placeholder="6000" value={newBooking.amount} onChange={e => setNewBooking(p=>({...p,amount:e.target.value}))}/>
+                    <label>Total Cost (Ksh)</label>
+                    <input value={newBooking.amount || "-"} readOnly />
+                  </div>
+                </div>
+                <div className="dh-form-row">
+                  <div className="dh-form-group">
+                    <label>Room Capacity</label>
+                    <input value={newBooking.roomCapacity || "-"} readOnly />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Slot ID</label>
+                    <input value={newBooking.slotId || "-"} readOnly />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Room ID</label>
+                    <input value={newBooking.roomId || "-"} readOnly />
                   </div>
                 </div>
               </div>
               <div className="dh-modal-ft">
-                <button className="dh-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-                <button className="dh-btn-primary" onClick={submitNewBooking}>Create Booking</button>
+                <button className="dh-btn-cancel" onClick={closeBookingModal}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitNewBooking} disabled={bookingSubmitting}>
+                  {bookingSubmitting ? "Creating..." : "Create Booking"}
+                </button>
               </div>
             </div>
           </div>
@@ -2424,6 +3172,21 @@ export default function AdminDashboard() {
                       onChange={(e) => editingRoomId
                         ? setEditRoomData({ ...editRoomData, capacity: e.target.value })
                         : setNewRoomData({ ...newRoomData, capacity: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Cost (Ksh) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 6000"
+                      value={editingRoomId ? editRoomData.cost : newRoomData.cost}
+                      onChange={(e) => editingRoomId
+                        ? setEditRoomData({ ...editRoomData, cost: e.target.value })
+                        : setNewRoomData({ ...newRoomData, cost: e.target.value })
                       }
                       required
                     />

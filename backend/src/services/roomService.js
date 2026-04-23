@@ -2,9 +2,7 @@ const prisma = require('../lib/prisma');
 
 class RoomService {
   // Get all rooms (clients see only active rooms)
-  async getAllRooms(includeInactive = false) {
-    const where = includeInactive ? {} : { is_active: true }
-    
+  async getAllRooms() {  
     return await prisma.room.findMany({
       orderBy: { createdAt: 'desc' },
     })
@@ -46,7 +44,7 @@ class RoomService {
         description: description || null,
         imageUrl: imageUrl || null,
         cost: cost || 0,
-        is_active: true
+        isActive: true
       }
     })
   }

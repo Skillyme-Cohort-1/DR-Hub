@@ -2,6 +2,8 @@ const express = require('express');
 const {
   checkAvailability,
   createBooking,
+  nonUserBooking,
+  adminUserBooking,
   getMyBookings,
   getBookingById,
   cancelBooking,
@@ -12,12 +14,15 @@ const {
   requireAuth, 
   requireAdmin 
 } = require('../middleware/authMiddleware');
+const { uploadBookingDocuments } = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
 
 // Public routes — no auth required
 router.get('/availability', checkAvailability);
 router.post('/', createBooking);
+router.post('/non-user', uploadBookingDocuments, nonUserBooking);
+router.post('/admin-user', requireAuth, requireAdmin, adminUserBooking);
 
 // Authenticated routes
 router.get('/my-bookings', requireAuth, getMyBookings);

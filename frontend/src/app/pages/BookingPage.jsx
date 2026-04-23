@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -104,7 +104,10 @@ const initialForm = {
   attendees: 1,
   addOnIds: [],
   notes: "",
+  documents: [],
 };
+
+const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
 
 function todayISODate() {
   const d = new Date();
@@ -123,15 +126,121 @@ function phoneOk(phone) {
   return digits.length >= 9 && digits.length <= 15;
 }
 
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function BookingPage() {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
-  const [bookingRef, setBookingRef] = useState(null);
+  const [submitError, setSubmitError] = useState("");
+  const [reservationTypes, setReservationTypes] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsError, setRoomsError] = useState("");
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState("");
 
   const minDate = useMemo(() => todayISODate(), []);
 
-  const selectedType = RESERVATION_TYPES.find((t) => t.id === form.reservationTypeId);
+  useEffect(() => {
+    let mounted = true;
+    const loadRooms = async () => {
+      setRoomsLoading(true);
+      setRoomsError("");
+      try {
+        const response = await fetch(`${API_BASE}/api/rooms`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            "Content-Type": "application/json",
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload?.success || !Array.isArray(payload?.data)) {
+          throw new Error("Failed to load reservation types.");
+        }
+        if (!mounted) return;
+        const mappedTypes = payload.data
+          .filter((room) => room?.isActive)
+          .map((room, index) => ({
+            id: room.id,
+            title: room.name,
+            description: room.description || "No description available.",
+            maxAttendees: Number(room.capacity) || 1,
+            cost: Number(room.cost) || 0,
+            icon: RESERVATION_TYPES[index % RESERVATION_TYPES.length].icon,
+          }));
+        setReservationTypes(mappedTypes);
+      } catch {
+        if (mounted) setRoomsError("Unable to load reservation types right now.");
+      } finally {
+        if (mounted) setRoomsLoading(false);
+      }
+    };
+
+    loadRooms();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const selectedRoomId = form.reservationTypeId;
+    const selectedDate = form.date;
+
+    setForm((prev) => ({ ...prev, slotId: "" }));
+    setSlots([]);
+    setSlotsError("");
+
+    if (!selectedRoomId || !selectedDate) return;
+
+    let mounted = true;
+    const loadSlots = async () => {
+      setSlotsLoading(true);
+      try {
+        const query = new URLSearchParams({
+          slotDate: selectedDate,
+          roomId: selectedRoomId,
+        }).toString();
+        const response = await fetch(`${API_BASE}/api/slots/${selectedRoomId}?${query}`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            "Content-Type": "application/json",
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload?.success || !Array.isArray(payload?.data)) {
+          throw new Error("Failed to load slots.");
+        }
+        if (!mounted) return;
+        const matchingSlots = payload.data.filter((slot) => {
+          const slotDate = new Date(slot.slotDate).toISOString().slice(0, 10);
+          return slotDate === selectedDate && slot.booked === false;
+        });
+        setSlots(matchingSlots);
+      } catch {
+        if (mounted) setSlotsError("Unable to load slots for that date.");
+      } finally {
+        if (mounted) setSlotsLoading(false);
+      }
+    };
+
+    loadSlots();
+    return () => {
+      mounted = false;
+    };
+  }, [form.reservationTypeId, form.date]);
+
+  const selectedType = reservationTypes.find((t) => t.id === form.reservationTypeId);
   const maxAttendees = selectedType?.maxAttendees ?? 14;
 
   const update = (patch) => setForm((f) => ({ ...f, ...patch }));
@@ -140,6 +249,50 @@ export function BookingPage() {
     setForm((f) => ({
       ...f,
       addOnIds: f.addOnIds.includes(id) ? f.addOnIds.filter((x) => x !== id) : [...f.addOnIds, id],
+    }));
+  };
+
+  const handleDocumentsChange = async (event) => {
+    const pickedFiles = Array.from(event.target.files || []);
+    if (!pickedFiles.length) return;
+
+    try {
+      const serialized = await Promise.all(
+        pickedFiles.map(async (file) => {
+          const dataURL = await readFileAsDataURL(file);
+          const base64Content = dataURL.includes(",") ? dataURL.split(",")[1] : "";
+          return {
+            name: "",
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            size: file.size,
+            contentBase64: base64Content,
+          };
+        })
+      );
+
+      setForm((prev) => ({
+        ...prev,
+        documents: [...prev.documents, ...serialized],
+      }));
+    } catch {
+      setSubmitError("Some documents could not be read. Please try again.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const removeDocument = (indexToRemove) => {
+    setForm((prev) => ({
+      ...prev,
+      documents: prev.documents.filter((_, index) => index !== indexToRemove),
+    }));
+  };
+
+  const updateDocumentName = (indexToUpdate, name) => {
+    setForm((prev) => ({
+      ...prev,
+      documents: prev.documents.map((doc, index) => (index === indexToUpdate ? { ...doc, name } : doc)),
     }));
   };
 
@@ -168,55 +321,58 @@ export function BookingPage() {
   };
 
   const handleSubmit = async () => {
+    if (!selectedType) return;
+    const hasUnnamedDocuments = form.documents.some((doc) => !doc.name?.trim());
+    if (hasUnnamedDocuments) {
+      setSubmitError("Please provide a name for every uploaded document.");
+      return;
+    }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const ref = `DRH-${Date.now().toString(36).toUpperCase()}`;
-    setBookingRef(ref);
-    setSubmitting(false);
-  };
+    setSubmitError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/bookings/non-user`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId: form.reservationTypeId,
+          slotId: form.slotId,
+          bookingDate: form.date,
+          totalCost: selectedType.cost,
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          phoneNumber: form.phone.trim(),
+          numberOfAttendees: form.attendees,
+          documents: form.documents,
+        }),
+      });
 
-  const resetFlow = () => {
-    setForm(initialForm);
-    setStep(1);
-    setBookingRef(null);
-  };
+      const responseText = await response.text();
+      let payload = null;
+      try {
+        payload = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        payload = null;
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || responseText || "Unable to submit your booking at the moment.");
+      }
 
-  if (bookingRef) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
-        <BookingHeader />
-        <main className="mx-auto max-w-lg px-6 py-16 lg:px-8">
-          <div className="rounded-2xl border border-[#E67E22]/25 bg-[#E67E22]/5 p-10 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#E67E22]/20 text-[#E67E22]">
-              <Check className="h-8 w-8" aria-hidden />
-            </div>
-            <h1 className="text-2xl font-semibold text-white" style={{ fontFamily: "var(--font-display)" }}>
-              Request received
-            </h1>
-            <p className="mt-3 text-white/65">
-              We&apos;ll confirm your booking by email shortly. Reference:
-            </p>
-            <p className="mt-4 font-mono text-lg text-[#E67E22]">{bookingRef}</p>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link
-                to="/"
-                className="rounded-lg border border-white/15 px-6 py-3 text-center text-sm font-semibold text-white hover:bg-white/5"
-              >
-                Back to home
-              </Link>
-              <button
-                type="button"
-                onClick={resetFlow}
-                className="rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white hover:bg-[#d35400]"
-              >
-                New booking
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+      const ref = payload?.data?.reference || payload?.data?.id || `DRH-${Date.now().toString(36).toUpperCase()}`;
+      navigate("/booking/success", {
+        replace: true,
+        state: {
+          bookingRef: ref,
+        },
+      });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to submit your booking at the moment.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
@@ -257,8 +413,10 @@ export function BookingPage() {
               Choose reservation type
             </h1>
             <p className="mb-8 text-white/55">Select the space that best fits your session.</p>
+            {roomsError ? <p className="mb-4 text-sm text-red-300">{roomsError}</p> : null}
+            {roomsLoading ? <p className="text-sm text-white/60">Loading reservation types...</p> : null}
             <div className="grid gap-4 sm:grid-cols-2">
-              {RESERVATION_TYPES.map((type) => {
+              {reservationTypes.map((type) => {
                 const Icon = type.icon;
                 const selected = form.reservationTypeId === type.id;
                 return (
@@ -284,6 +442,7 @@ export function BookingPage() {
                     </div>
                     <span className="text-lg font-semibold text-white">{type.title}</span>
                     <span className="mt-2 text-sm leading-relaxed text-white/55">{type.description}</span>
+                    <span className="mt-3 text-sm text-white/70">Ksh {type.cost.toLocaleString()}</span>
                     <span className="mt-4 text-xs font-medium uppercase tracking-wider text-[#E67E22]/90">
                       Up to {type.maxAttendees} attendees
                     </span>
@@ -321,27 +480,36 @@ export function BookingPage() {
                 <Clock className="h-4 w-4 text-[#E67E22]" aria-hidden />
                 Time slot
               </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {TIME_SLOTS.map((slot) => {
-                  const selected = form.slotId === slot.id;
-                  return (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => update({ slotId: slot.id })}
-                      className={`rounded-xl border px-4 py-4 text-left transition-all ${
-                        selected
-                          ? "border-[#E67E22] bg-[#E67E22]/10"
-                          : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                      }`}
-                    >
-                      <span className="block font-semibold text-white">{slot.label}</span>
-                      <span className="mt-1 block text-sm text-white/50">{slot.range}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {!form.date ? (
+                <p className="text-sm text-white/50">Select a date first to view available slots.</p>
+              ) : slotsLoading ? (
+                <p className="text-sm text-white/60">Loading available slots...</p>
+              ) : slotsError ? (
+                <p className="text-sm text-red-300">{slotsError}</p>
+              ) : slots.length === 0 ? (
+                <p className="text-sm text-white/50">No available slots for the selected date.</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {slots.map((slot) => {
+                    const selected = form.slotId === slot.id;
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => update({ slotId: slot.id })}
+                        className={`rounded-xl border px-4 py-4 text-left transition-all ${
+                          selected
+                            ? "border-[#E67E22] bg-[#E67E22]/10"
+                            : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                        }`}
+                      >
+                        <span className="block font-semibold text-white">{slot.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -492,6 +660,55 @@ export function BookingPage() {
               />
             </div>
 
+            <div className="mt-8">
+              <label htmlFor="booking-documents" className="mb-2 block text-sm font-medium text-white/80">
+                Documents <span className="font-normal text-white/40">(optional, multiple allowed)</span>
+              </label>
+              <input
+                id="booking-documents"
+                type="file"
+                multiple
+                onChange={handleDocumentsChange}
+                className="block w-full cursor-pointer rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#E67E22] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#d35400]"
+              />
+              {form.documents.length ? (
+                <ul className="mt-3 space-y-2">
+                  {form.documents.map((doc, index) => (
+                    <li
+                      key={`${doc.fileName}-${index}`}
+                      className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-3 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 truncate text-white/80">{doc.fileName}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeDocument(index)}
+                          className="shrink-0 text-xs font-medium text-red-300 hover:text-red-200"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="mt-2">
+                        <label htmlFor={`document-name-${index}`} className="mb-1 block text-xs text-white/60">
+                          Document name
+                        </label>
+                        <input
+                          id={`document-name-${index}`}
+                          type="text"
+                          value={doc.name}
+                          onChange={(e) => updateDocumentName(index, e.target.value)}
+                          placeholder="Enter a name for this document"
+                          className="w-full rounded-lg border border-white/10 bg-[#141414] px-3 py-2 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-white/45">No documents selected.</p>
+              )}
+            </div>
+
             {/* Summary */}
             <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[#E67E22]">Summary</h2>
@@ -507,7 +724,7 @@ export function BookingPage() {
                 <div className="flex justify-between gap-4">
                   <dt>Slot</dt>
                   <dd className="text-right text-white">
-                    {TIME_SLOTS.find((s) => s.id === form.slotId)?.label ?? "—"}
+                    {slots.find((s) => s.id === form.slotId)?.title ?? "—"}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
@@ -518,6 +735,12 @@ export function BookingPage() {
                   <dt>Add-ons</dt>
                   <dd className="text-right text-white">
                     {form.addOnIds.length ? `${form.addOnIds.length} selected` : "None"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Documents</dt>
+                  <dd className="text-right text-white">
+                    {form.documents.length ? `${form.documents.length} attached` : "None"}
                   </dd>
                 </div>
               </dl>
@@ -548,14 +771,17 @@ export function BookingPage() {
               <ArrowRight className="h-4 w-4" aria-hidden />
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d35400] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? "Submitting…" : "Submit booking request"}
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d35400] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "Submitting…" : "Submit booking request"}
+              </button>
+            </div>
           )}
         </div>
       </main>

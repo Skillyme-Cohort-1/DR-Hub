@@ -38,10 +38,11 @@ function sanitizeUser(user) {
 
 async function register(req, res, next) {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, gender, phoneNumber } = req.body;
+    
 
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: 'name, email, password and role are required.' });
+    if (!name || !email || !password || !role ) {
+      return res.status(400).json({ message: 'Name, Email, Password, Role, Gender and Phone Number are required.' });
     }
 
     if (password.length < PASSWORD_MIN_LENGTH) {
@@ -66,6 +67,8 @@ async function register(req, res, next) {
         name: String(name).trim(),
         email: normalizedEmail,
         role: normalizedRole,
+        phoneNumber: String(phoneNumber).trim(),
+        gender: gender,
         passwordHash,
         status: 'INACTIVE',
       },
@@ -106,6 +109,77 @@ async function register(req, res, next) {
     return next(error);
   }
 }
+
+async function selfUserRegistration(req, res, next) {
+  try {
+    const { name, email, password, gender, phoneNumber, occupation } = req.body;
+    console.log(req.body)
+
+    if (!name || !email || !password || !phoneNumber) {
+      return res.status(400).json({ message: 'name, email, password and phone number are required.' });
+    }
+
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.` });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'Email is already registered.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const user = await prisma.user.create({
+      data: {
+        name: String(name).trim(),
+        gender: String(gender).trim(),
+        phoneNumber: String(phoneNumber).trim(),
+        occupation: String(occupation).trim(),
+        email: normalizedEmail,
+        role: "MEMBER",
+        passwordHash,
+        status: 'INACTIVE',
+      },
+    });
+
+    const rawActivationToken = crypto.randomBytes(32).toString('hex');
+    const activationTokenHash = hashToken(rawActivationToken);
+    const activationExpiresAt = new Date(Date.now() + ACTIVATION_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000);
+
+    await prisma.accountActivationToken.create({
+      data: {
+        tokenHash: activationTokenHash,
+        expiresAt: activationExpiresAt,
+        userId: user.id,
+      },
+    });
+
+    try {
+      const result = await sendActivationEmail({
+        to: user.email,
+        name: user.name,
+        activationUrl: getActivationUrl(rawActivationToken),
+      });
+
+      if (!result.ok) {
+        console.warn(`Activation email skipped: ${result.reason}`);
+      }
+    } catch (mailError) {
+      // Do not fail registration if email sending fails.
+      console.error('Failed to send activation email:', mailError.message);
+    }
+
+    return res.status(201).json({
+      message: 'Registration successful. Please check your email to activate your account.',
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 
 async function login(req, res, next) {
   try {
@@ -390,6 +464,29 @@ async function getUserById(req, res, next) {
   }
 }
 
+async function getMyProfile(req, res, next) {
+  try {
+    if (!req.authUser?.id) {
+      return res.status(401).json({ message: 'Authentication is required.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.authUser.id },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    return res.status(200).json({
+      message: 'Profile fetched successfully.',
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   register,
   activateAccount,
@@ -399,4 +496,6 @@ module.exports = {
   updateProfile,
   getAllUsers,
   getUserById,
+  getMyProfile,
+  selfUserRegistration
 };

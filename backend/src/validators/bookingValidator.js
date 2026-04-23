@@ -52,6 +52,56 @@ const createBookingSchema = z.object({
   slot: TimeSlot
 });
 
+const createNonUserBookingSchema = z.object({
+  roomId: z.string({
+    required_error: 'roomId is required'
+  }).cuid({ message: 'Invalid roomId format' }),
+  slotId: z.string({
+    required_error: 'slotId is required'
+  }).cuid({ message: 'Invalid slotId format' }),
+  bookingDate: BookingDate,
+  totalCost: z.coerce.number({
+    required_error: 'totalCost is required'
+  }).int({ message: 'totalCost must be a whole number' }).positive({ message: 'totalCost must be greater than 0' }),
+  fullName: z.string({
+    required_error: 'fullName is required'
+  }).min(2, { message: 'fullName must be at least 2 characters' })
+    .max(100, { message: 'fullName cannot exceed 100 characters' }),
+  email: z.string({
+    required_error: 'email is required'
+  }).email({ message: 'Invalid email address' }),
+  phoneNumber: z.string({
+    required_error: 'phoneNumber is required'
+  }).min(7, { message: 'phoneNumber must be at least 7 characters' })
+    .max(20, { message: 'phoneNumber cannot exceed 20 characters' }),
+  numberOfAttendees: z.coerce.number({
+    required_error: 'numberOfAttendees is required'
+  }).int({ message: 'numberOfAttendees must be a whole number' }).positive({ message: 'numberOfAttendees must be greater than 0' }),
+  documents: z.array(z.object({
+    documentName: z.string().min(1, { message: 'documentName is required' }),
+    documentFile: z.string().min(1, { message: 'documentFile is required' })
+  })).optional()
+});
+
+const createAdminUserBookingSchema = z.object({
+  roomId: z.string({
+    required_error: 'roomId is required'
+  }).cuid({ message: 'Invalid roomId format' }),
+  slotId: z.string({
+    required_error: 'slotId is required'
+  }).cuid({ message: 'Invalid slotId format' }),
+  userId: z.string({
+    required_error: 'userId is required'
+  }).cuid({ message: 'Invalid userId format' }),
+  bookingDate: BookingDate,
+  totalCost: z.number({
+    required_error: 'totalCost is required'
+  }).int({ message: 'totalCost must be a whole number' }).positive({ message: 'totalCost must be greater than 0' }),
+  numberOfAttendees: z.number({
+    required_error: 'numberOfAttendees is required'
+  }).int({ message: 'numberOfAttendees must be a whole number' }).positive({ message: 'numberOfAttendees must be greater than 0' })
+});
+
 // AVAILABILITY CHECK SCHEMA
 const availabilitySchema = z.object({
   roomId: z.string().cuid({ message: 'Invalid roomId format' }),
@@ -84,6 +134,8 @@ const validate = (schema, data) => {
 
 module.exports = {
   createBookingSchema,
+  createNonUserBookingSchema,
+  createAdminUserBookingSchema,
   availabilitySchema,
   cancelBookingSchema,
   validate

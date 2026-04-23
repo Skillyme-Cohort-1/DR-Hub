@@ -12,6 +12,11 @@ const contactSchema = z.object({
     .string({ required_error: 'email is required' })
     .trim()
     .email('email must be a valid email address'),
+  phoneNumber: z
+    .string({ required_error: 'Phone Number is required' })
+    .trim()
+    .min(2, 'Phone Number must be at least 2 characters')
+    .max(120, 'Phone Number must be at most 120 characters'),
   message: z
     .string({ required_error: 'message is required' })
     .trim()
@@ -28,9 +33,10 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function buildContactEmail({ fullName, email, message }) {
+function buildContactEmail({ fullName, email, phoneNumber, message }) {
   const safeName = escapeHtml(fullName);
   const safeEmail = escapeHtml(email);
+  const safePhoneNumber = escapeHtml(phoneNumber);
   const safeMessage = escapeHtml(message).replace(/\n/g, '<br />');
 
   return {
@@ -70,12 +76,13 @@ async function submitContactForm(req, res, next) {
       });
     }
 
-    const { fullName, email, message } = result.data;
+    const { fullName, email, phoneNumber, message } = result.data;
 
     const savedMessage = await prisma.contactMessage.create({
       data: {
         fullName,
         email,
+        phoneNumber,
         message,
       },
     });
@@ -104,6 +111,23 @@ async function submitContactForm(req, res, next) {
   }
 }
 
+async function getAllMessages(req, res, next) {
+  try {
+    const messages = await prisma.contactMessage.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.status(200).json({
+      message: 'Messages fetched successfully.',
+      count: messages.length,
+      messages: messages
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   submitContactForm,
+  getAllMessages
 };

@@ -5,23 +5,45 @@ import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
+import { BookingSuccessPage } from './app/pages/BookingSuccessPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
 import ContactPage from './app/pages/ContactPage';
 
-// Simple protected route
+function isAuthenticated() {
+  return localStorage.getItem('isLoggedIn') === 'true';
+}
+
 function PrivateRoute({ children }) {
-  const isLoggedIn = localStorage.getItem('isLoggedIn');
-  return isLoggedIn ? children : <Navigate to="/login" />;
+  return isAuthenticated() ? children : <Navigate to="/login" replace />;
+}
+
+function PublicOnlyRoute({ children }) {
+  return isAuthenticated() ? <Navigate to="/dashboard" replace /> : children;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/" element={isAuthenticated() ? <Navigate to="/dashboard" replace /> : <HomePage />} />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicOnlyRoute>
+              <RegisterPage />
+            </PublicOnlyRoute>
+          }
+        />
         <Route path="/booking" element={<BookingPage />} />
+        <Route path="/booking/success" element={<BookingSuccessPage />} />
         <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected Dashboard Route */}
