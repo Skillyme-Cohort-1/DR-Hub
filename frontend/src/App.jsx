@@ -5,6 +5,7 @@ import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
+import { BookingSuccessPage } from './app/pages/BookingSuccessPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
 import ContactPage from './app/pages/ContactPage';
 
@@ -42,6 +43,7 @@ export default function App() {
           }
         />
         <Route path="/booking" element={<BookingPage />} />
+        <Route path="/booking/success" element={<BookingSuccessPage />} />
         <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected Dashboard Route */}

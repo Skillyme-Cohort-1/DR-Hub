@@ -38,10 +38,11 @@ function sanitizeUser(user) {
 
 async function register(req, res, next) {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, gender, phoneNumber } = req.body;
+    
 
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: 'name, email, password and role are required.' });
+    if (!name || !email || !password || !role ) {
+      return res.status(400).json({ message: 'Name, Email, Password, Role, Gender and Phone Number are required.' });
     }
 
     if (password.length < PASSWORD_MIN_LENGTH) {
@@ -66,6 +67,8 @@ async function register(req, res, next) {
         name: String(name).trim(),
         email: normalizedEmail,
         role: normalizedRole,
+        phoneNumber: String(phoneNumber).trim(),
+        gender: gender,
         passwordHash,
         status: 'INACTIVE',
       },
@@ -110,6 +113,7 @@ async function register(req, res, next) {
 async function selfUserRegistration(req, res, next) {
   try {
     const { name, email, password, gender, phoneNumber, occupation } = req.body;
+    console.log(req.body)
 
     if (!name || !email || !password || !phoneNumber) {
       return res.status(400).json({ message: 'name, email, password and phone number are required.' });

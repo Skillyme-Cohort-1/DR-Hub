@@ -1,0 +1,19 @@
+[{
+    "roomId": "jsjsjsjjakakak",
+    "slotId": "jjakakakajaka",
+    "bookingDate": "2026-04-23",
+    "totalCost": 7000,
+    "fullName": "John Doe",
+    "email": "johndoe@gmail.com",
+    "phoneNumber": "+254745491093",
+    "numberOfAttendees": 5
+},
+{
+    "roomId": "jsjsjsjjakakak",
+    "slotId": "jjakakakajaka",
+    "userId": "tywuiii291991",
+    "bookingDate": "2026-04-23",
+    "totalCost": 7000,
+    "numberOfAttendees": 5
+}
+]

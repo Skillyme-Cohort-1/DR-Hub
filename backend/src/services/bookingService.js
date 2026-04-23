@@ -1,8 +1,21 @@
 const prisma                      = require('../lib/prisma');
 const roomService                 = require('./roomService');
-const { sendBookingPendingEmail } = require('../../emails');
+const bcrypt                      = require('bcryptjs');
+const crypto                      = require('crypto');
+const { hashToken }               = require('../lib/auth');
+const { sendBookingPendingEmail, sendActivationEmail } = require('../../emails');
 
 const CANCELLATION_WINDOW_HOURS = 24;
+const BCRYPT_ROUNDS = 12;
+const DEFAULT_GUEST_PASSWORD = 'DrHub@12345';
+const ACTIVATION_TOKEN_EXPIRES_HOURS = Number(process.env.ACTIVATION_TOKEN_EXPIRES_HOURS || 24);
+
+function getActivationUrl(rawToken) {
+    const baseUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const url = new URL('/api/users/activate-account', baseUrl);
+    url.searchParams.set('token', rawToken);
+    return url.toString();
+}
 
 const ALLOWED_STATUS_TRANSITIONS = {
     PENDING:   ['CONFIRMED', 'CANCELLED'],
@@ -22,7 +35,7 @@ function generateBookingReference() {
 }
 
 function formatAmountKES(amountCents) {
-    return (amountCents / 100).toLocaleString('en-KE', {
+    return (amountCents).toLocaleString('en-KE', {
         style:    'currency',
         currency: 'KES'
     });
@@ -179,6 +192,318 @@ async function createBooking({ roomId, date, slot, name, email }) {
     return sanitizeBooking(booking);
 }
 
+async function createNonUserBooking({
+    roomId,
+    slotId,
+    bookingDate,
+    totalCost,
+    fullName,
+    email,
+    phoneNumber,
+    numberOfAttendees,
+    documents = []
+}) {
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedName = String(fullName).trim();
+    const normalizedPhone = String(phoneNumber).trim();
+    const normalizedDate = new Date(bookingDate);
+
+    const room = await prisma.room.findUnique({
+        where: { id: roomId }
+    });
+    if (!room) throw new Error('ROOM_NOT_FOUND');
+    if (!room.isActive) throw new Error('ROOM_INACTIVE');
+
+    const slot = await prisma.bookSlot.findFirst({
+        where: {
+            id: slotId,
+            roomId
+        }
+    });
+    if (!slot) throw new Error('SLOT_NOT_FOUND');
+    if (slot.booked) throw new Error('SLOT_UNAVAILABLE');
+    if (slot.slotDate && new Date(slot.slotDate).toDateString() !== normalizedDate.toDateString()) {
+        throw new Error('SLOT_DATE_MISMATCH');
+    }
+
+    const activeBookingOnSlot = await prisma.booking.findFirst({
+        where: {
+            slotId,
+            status: { in: ['PENDING', 'CONFIRMED'] }
+        },
+        select: { id: true }
+    });
+    if (activeBookingOnSlot) throw new Error('SLOT_UNAVAILABLE');
+
+    let reference;
+    let referenceIsUnique = false;
+
+    while (!referenceIsUnique) {
+        reference = generateBookingReference();
+        const existing = await prisma.booking.findUnique({ where: { reference } });
+        if (!existing) referenceIsUnique = true;
+    }
+
+    let booking;
+    let createdNewUser = false;
+    let activationContext = null;
+    try {
+        booking = await prisma.$transaction(async (tx) => {
+            const existingUserByEmail = await tx.user.findUnique({
+                where: { email: normalizedEmail }
+            });
+
+            const existingUserByPhone = await tx.user.findUnique({
+                where: { phoneNumber: normalizedPhone }
+            });
+
+            const existingUser = existingUserByEmail || existingUserByPhone;
+
+            const user = existingUser
+                ? await tx.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        name: existingUser.name || normalizedName,
+                        email: existingUser.email || normalizedEmail,
+                        phoneNumber: existingUser.phoneNumber || normalizedPhone
+                    },
+                    select: { id: true, name: true, email: true, phoneNumber: true }
+                })
+                : await tx.user.create({
+                    data: (() => {
+                        createdNewUser = true;
+                        const rawActivationToken = crypto.randomBytes(32).toString('hex');
+                        activationContext = {
+                            rawToken: rawActivationToken
+                        };
+                        return {
+                            name: normalizedName,
+                            email: normalizedEmail,
+                            phoneNumber: normalizedPhone,
+                            role: 'MEMBER',
+                            status: 'INACTIVE',
+                            passwordHash: bcrypt.hashSync(DEFAULT_GUEST_PASSWORD, BCRYPT_ROUNDS)
+                        };
+                    })(),
+                    select: { id: true, name: true, email: true, phoneNumber: true }
+                });
+
+            if (createdNewUser && activationContext?.rawToken) {
+                const activationTokenHash = hashToken(activationContext.rawToken);
+                const activationExpiresAt = new Date(Date.now() + ACTIVATION_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000);
+
+                await tx.accountActivationToken.create({
+                    data: {
+                        tokenHash: activationTokenHash,
+                        expiresAt: activationExpiresAt,
+                        userId: user.id
+                    }
+                });
+            }
+
+            const createdBooking = await tx.booking.create({
+                data: {
+                    reference,
+                    date: normalizedDate,
+                    status: 'PENDING',
+                    amountCharged: totalCost,
+                    notes: `Guest booking. Attendees: ${numberOfAttendees}`,
+                    userId: user.id,
+                    roomId,
+                    slotId
+                },
+                include: {
+                    room: { select: { id: true, name: true } },
+                    user: { select: { id: true, name: true, email: true } },
+                    payment: true
+                }
+            });
+
+            if (Array.isArray(documents) && documents.length > 0) {
+                const normalizedDocuments = documents
+                    .filter((doc) => doc && doc.documentName && doc.documentFile)
+                    .map((doc) => ({
+                        documentName: String(doc.documentName).trim(),
+                        documentFile: String(doc.documentFile).trim(),
+                        status: 'PENDING',
+                        userId: user.id
+                    }));
+
+                if (normalizedDocuments.length > 0) {
+                    await tx.userDocument.createMany({
+                        data: normalizedDocuments
+                    });
+                }
+            }
+
+            await tx.bookSlot.update({
+                where: { id: slotId },
+                data: { booked: true }
+            });
+
+            return createdBooking;
+        });
+    } catch (error) {
+        if (error.code === 'P2002') {
+            const targets = Array.isArray(error.meta?.target)
+                ? error.meta.target
+                : [String(error.meta?.target || '')];
+
+            if (targets.some((target) => String(target).includes('slotId'))) {
+                throw new Error('SLOT_UNAVAILABLE');
+            }
+            if (targets.some((target) => String(target).includes('phoneNumber'))) {
+                throw new Error('PHONE_NUMBER_IN_USE');
+            }
+        }
+        throw error;
+    }
+
+    try {
+        await sendBookingPendingEmail({
+            to: normalizedEmail,
+            name: normalizedName,
+            reference: booking.reference,
+            roomName: room.name,
+            date: new Date(booking.date).toDateString(),
+            slot: slot.title,
+            amountDue: formatAmountKES(booking.amountCharged)
+        });
+    } catch (emailError) {
+        console.error(`[BOOKING] Email notification failed for ${booking.reference}:`, emailError.message);
+    }
+
+    if (createdNewUser && activationContext?.rawToken) {
+        try {
+            const result = await sendActivationEmail({
+                to: normalizedEmail,
+                name: normalizedName,
+                activationUrl: getActivationUrl(activationContext.rawToken)
+            });
+            if (!result.ok) {
+                console.warn(`Activation email skipped: ${result.reason}`);
+            }
+        } catch (mailError) {
+            console.error('Failed to send activation email:', mailError.message);
+        }
+    }
+
+    return sanitizeBooking(booking);
+}
+
+async function createAdminUserBooking({
+    roomId,
+    slotId,
+    userId,
+    bookingDate,
+    totalCost,
+    numberOfAttendees
+}) {
+    const normalizedDate = new Date(bookingDate);
+
+    const room = await prisma.room.findUnique({
+        where: { id: roomId }
+    });
+    if (!room) throw new Error('ROOM_NOT_FOUND');
+    if (!room.isActive) throw new Error('ROOM_INACTIVE');
+
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, status: true }
+    });
+    if (!user) throw new Error('USER_NOT_FOUND');
+    if (user.status !== 'ACTIVE') throw new Error('USER_NOT_ACTIVE');
+
+    const slot = await prisma.bookSlot.findFirst({
+        where: {
+            id: slotId,
+            roomId
+        }
+    });
+    if (!slot) throw new Error('SLOT_NOT_FOUND');
+    if (slot.booked) throw new Error('SLOT_UNAVAILABLE');
+    if (slot.slotDate && new Date(slot.slotDate).toDateString() !== normalizedDate.toDateString()) {
+        throw new Error('SLOT_DATE_MISMATCH');
+    }
+
+    const activeBookingOnSlot = await prisma.booking.findFirst({
+        where: {
+            slotId,
+            status: { in: ['PENDING', 'CONFIRMED'] }
+        },
+        select: { id: true }
+    });
+    if (activeBookingOnSlot) throw new Error('SLOT_UNAVAILABLE');
+
+    let reference;
+    let referenceIsUnique = false;
+    while (!referenceIsUnique) {
+        reference = generateBookingReference();
+        const existing = await prisma.booking.findUnique({ where: { reference } });
+        if (!existing) referenceIsUnique = true;
+    }
+
+    let booking;
+    try {
+        booking = await prisma.$transaction(async (tx) => {
+            const createdBooking = await tx.booking.create({
+                data: {
+                    reference,
+                    date: normalizedDate,
+                    status: 'PENDING',
+                    amountCharged: totalCost,
+                    notes: `Admin booking for user ${userId}. Attendees: ${numberOfAttendees}`,
+                    userId,
+                    roomId,
+                    slotId
+                },
+                include: {
+                    room: { select: { id: true, name: true } },
+                    user: { select: { id: true, name: true, email: true } },
+                    payment: true
+                }
+            });
+
+            await tx.bookSlot.update({
+                where: { id: slotId },
+                data: { booked: true }
+            });
+
+            return createdBooking;
+        });
+    } catch (error) {
+        if (error.code === 'P2002') {
+            const targets = Array.isArray(error.meta?.target)
+                ? error.meta.target
+                : [String(error.meta?.target || '')];
+            if (targets.some((target) => String(target).includes('slotId'))) {
+                throw new Error('SLOT_UNAVAILABLE');
+            }
+        }
+        throw error;
+    }
+
+    try {
+        if (user.email) {
+            await sendBookingPendingEmail({
+                to: user.email,
+                name: user.name || 'Customer',
+                reference: booking.reference,
+                roomName: room.name,
+                date: new Date(booking.date).toDateString(),
+                slot: slot.title,
+                amountDue: formatAmountKES(booking.amountCharged)
+            });
+        }
+    } catch (emailError) {
+        console.error(`[BOOKING] Email notification failed for ${booking.reference}:`, emailError.message);
+    }
+
+    return sanitizeBooking(booking);
+}
+
+
+
 async function getBookingsByUser(userId) {
     const bookings = await prisma.booking.findMany({
         where:   { userId },
@@ -219,7 +544,8 @@ async function getAllBookings({ status, roomId, date } = {}) {
         include: {
             room:    { select: { id: true, name: true } },
             user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, providerRef: true } }
+            payment: { select: { id: true, status: true, paymentReference: true, paymentLink: true } },
+            slot: { select: { id: true, title: true, slotDate: true, booked: true } }
         },
         orderBy: { createdAt: 'desc' }
     });
@@ -296,6 +622,8 @@ async function updateBookingStatus({ bookingId, status, updatedBy }) {
 module.exports = {
     checkAvailability,
     createBooking,
+    createNonUserBooking,
+    createAdminUserBooking,
     getBookingsByUser,
     getBookingById,
     getAllBookings,
