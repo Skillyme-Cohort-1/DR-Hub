@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
@@ -20,28 +20,7 @@ import {
   X,
 } from "lucide-react";
 
-const stats = [
-  { label: "Total Bookings", value: "12", icon: Calendar, trend: "+2 this month" },
-  { label: "Upcoming Sessions", value: "3", icon: Clock, trend: "Next: Tomorrow" },
-  { label: "Completed", value: "8", icon: CheckCircle, trend: "100% attendance" },
-  { label: "Total Spent", value: "Ksh 42K", icon: CreditCard, trend: "Member savings: 4.2K" },
-];
-
-const upcomingBookings = [
-  { id: "DRH-20250401-001", room: "Boardroom", date: "Apr 1, 2025", time: "10:00am - 1:00pm", status: "confirmed", amount: 4500 },
-  { id: "DRH-20250405-002", room: "Private Office", date: "Apr 5, 2025", time: "2:00pm - 5:00pm", status: "pending", amount: 3000 },
-  { id: "DRH-20250410-003", room: "Combined Space", date: "Apr 10, 2025", time: "10:00am - 1:00pm", status: "confirmed", amount: 6000 },
-];
-
-const checkins = [
-  { bookingId: "DRH-20250401-001", date: "Apr 1, 2025", time: "9:45am", method: "QR Check-in" },
-  { bookingId: "DRH-20250315-001", date: "Mar 15, 2025", time: "9:50am", method: "Front desk" },
-];
-
-const payments = [
-  { reference: "PAY-74821", date: "Mar 15, 2025", amount: "Ksh 4,500", status: "Paid" },
-  { reference: "PAY-74875", date: "Apr 5, 2025", amount: "Ksh 3,000", status: "Pending" },
-];
+const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
 
 function getStatusBadge(status) {
   const styles = {
@@ -68,6 +47,15 @@ export function ClientDashboard() {
   const [documentName, setDocumentName] = useState("");
   const [documentFile, setDocumentFile] = useState(null);
   const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [myBookings, setMyBookings] = useState([]);
+  const [myPayments, setMyPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [paymentsError, setPaymentsError] = useState("");
+  const [checkins, setCheckins] = useState([]);
+  const [checkinsLoading, setCheckinsLoading] = useState(true);
+  const [checkinsError, setCheckinsError] = useState("");
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [bookingsError, setBookingsError] = useState("");
   const [profileForm, setProfileForm] = useState({
     id: "",
     name: "",
@@ -87,7 +75,37 @@ export function ClientDashboard() {
   useEffect(() => {
     fetchUserProfile();
     fetchDocuments();
+    fetchMyBookings();
+    fetchMyPayments();
+    fetchCheckins();
   }, []);
+
+  const formatStatus = (value) => {
+    const statusMap = {
+      CHECKED_IN: "Checked In",
+      CHECKED_OUT: "Checked Out",
+      NO_SHOW: "No Show",
+      COMPLETED: "Completed",
+      PENDING: "Pending",
+      CANCELLED: "Cancelled",
+      PAID: "Paid",
+      DRAFT: "Draft",
+      FULLY_PAID: "Fully Paid",
+      REPORTED: "Reported",
+      FAILED: "Failed",
+      APPROVED: "Approved",
+      ACTIVE: "Active",
+      INACTIVE: "Inactive"
+    };
+    return statusMap[value] || value || "Unknown";
+  }
+
+
+  function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleString(); // uses user's locale
+}
+
 
   const getStoredAccessToken = () => {
     const directToken =
@@ -249,6 +267,148 @@ export function ClientDashboard() {
     }
   };
 
+  const fetchMyBookings = async () => {
+    setBookingsLoading(true);
+    setBookingsError("");
+    try {
+      const token = getStoredAccessToken();
+      if (!token) {
+        setMyBookings([]);
+        setBookingsError("No access token found. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/bookings/my-bookings`, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to fetch bookings");
+      }
+
+      setMyBookings(Array.isArray(payload?.bookings) ? payload.bookings : []);
+    } catch (error) {
+      setMyBookings([]);
+      setBookingsError("Could not load bookings.");
+      console.error("Error fetching bookings:", error);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const fetchMyPayments = async () => {
+    setPaymentsLoading(true);
+    setPaymentsError("");
+    try {
+      const token = getStoredAccessToken();
+      if (!token) {
+        setMyPayments([]);
+        setPaymentsError("No access token found. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/payments`, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json();
+      console.log("Payments API response payload:", payload);
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to fetch payments");
+      }
+      console.log("Fetched payments data:", payload?.data);
+      setMyPayments(Array.isArray(payload?.data) ? payload.data : []);
+    } catch (error) {
+      setMyPayments([]);
+      setPaymentsError("Could not load payments.");
+      console.error("Error fetching payments:", error);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  const fetchCheckins = async () => {
+    setCheckinsLoading(true);
+    setCheckinsError("");
+    try {
+      const token = getStoredAccessToken();
+      if (!token) {
+        setCheckins([]);
+        setCheckinsError("No access token found. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/attendances`, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json();
+      console.log(payload);
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to fetch checkins");
+      }
+
+      setCheckins(payload? payload : []);
+    } catch (error) {
+      setCheckins([]);
+      setCheckinsError("Could not load checkins.");
+      console.error("Error fetching checkins:", error);
+    } finally {
+      setCheckinsLoading(false);
+    }
+  };
+
+  const formatBookingDate = (value) => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatCurrency = (amount) => `Ksh ${Number(amount || 0).toLocaleString()}`;
+
+  const upcomingBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return myBookings
+      .filter((booking) => {
+        const bookingDate = new Date(booking?.date);
+        return !Number.isNaN(bookingDate.getTime()) && bookingDate >= today;
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [myBookings]);
+
+  const stats = useMemo(() => {
+    const completed = myBookings.filter((booking) => booking.status === "CONFIRMED" || booking.status === "COMPLETED").length;
+    const totalSpent = myBookings.reduce((sum, booking) => sum + Number(booking.amountCharged || 0), 0);
+
+    return [
+      { label: "Total Bookings", value: String(myBookings.length), icon: Calendar, trend: "All reservations" },
+      { label: "Upcoming Sessions", value: String(upcomingBookings.length), icon: Clock, trend: "Future reservations" },
+      { label: "Completed", value: String(completed), icon: CheckCircle, trend: "Finished sessions" },
+      { label: "Total Spent", value: formatCurrency(totalSpent), icon: CreditCard, trend: "Across all bookings" },
+    ];
+  }, [myBookings, upcomingBookings]);
+
   const handleUploadDocument = async (event) => {
     event.preventDefault();
     setDocumentsError("");
@@ -409,6 +569,19 @@ export function ClientDashboard() {
     navigate("/login");
   };
 
+  const handlePayDeposit = (booking) => {
+    const role = (profileForm.role || "").toUpperCase();
+    const bookingFee = role === "MEMBER" ? 1000 : 2000;
+    navigate("/booking/pay", {
+      state: {
+        booking,
+        bookingFee,
+        defaultPhone: profileForm.phoneNumber || "",
+        reservationTypeName: booking?.room?.name || "Room booking",
+      },
+    });
+  };
+
   const renderContent = () => {
     if (activeSection === "bookings") {
       return (
@@ -434,27 +607,56 @@ export function ClientDashboard() {
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Booking ID</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Room</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Date</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Time</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Amount</th>
                     <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-white/70">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {upcomingBookings.map((booking, index) => (
-                    <tr key={booking.id} className="group border-b border-white/5 transition-colors hover:bg-white/[0.02]">
-                      <td className="px-4 py-4 text-sm font-mono text-white/60">{booking.id}</td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm font-medium text-white">{booking.room}</span>
+                  {bookingsLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-white/60">
+                        Loading bookings...
                       </td>
-                      <td className="px-4 py-4 text-sm text-white/70">{booking.date}</td>
-                      <td className="px-4 py-4 text-sm text-white/70">{booking.time}</td>
-                      <td className="px-4 py-4">{getStatusBadge(booking.status)}</td>
-                      <td className="px-4 py-4 text-sm font-semibold text-white">Ksh {booking.amount.toLocaleString()}</td>
+                    </tr>
+                  ) : null}
+                  {!bookingsLoading && bookingsError ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-red-200">
+                        {bookingsError}
+                      </td>
+                    </tr>
+                  ) : null}
+                  {!bookingsLoading && !bookingsError && myBookings.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-white/60">
+                        No bookings yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                  {!bookingsLoading && !bookingsError && myBookings.map((booking) => (
+                    <tr key={booking.id} className="group border-b border-white/5 transition-colors hover:bg-white/[0.02]">
+                      <td className="px-4 py-4 text-sm font-mono text-white/60">{booking.reference || booking.id}</td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm font-medium text-white">{booking.room?.name || "N/A"}</span>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-white/70">{formatBookingDate(booking.date)}</td>
+                      <td className="px-4 py-4">{getStatusBadge(formatStatus(booking.status))}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-white">{formatCurrency(booking.amountCharged)}</td>
                       <td className="px-4 py-4 text-right">
-                        <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
-                          View Details
-                        </button>
+                        {booking.status === "DRAFT" ? (
+                          <button
+                            type="button"
+                            onClick={() => handlePayDeposit(booking)}
+                            className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]"
+                          >
+                            Pay Deposit
+                          </button>
+                        ) : (
+                          <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
+                            View Details
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -590,22 +792,16 @@ export function ClientDashboard() {
                   <tr className="border-b border-white/10 bg-white/[0.02]">
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Booking ID</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Date</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Time</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Method</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {checkins.map((checkin) => (
                     <tr key={`${checkin.bookingId}-${checkin.time}`} className="border-b border-white/5 transition-colors hover:bg-white/[0.02]">
-                      <td className="px-4 py-4 text-sm font-mono text-white/60">{checkin.bookingId}</td>
-                      <td className="px-4 py-4 text-sm text-white/70">{checkin.date}</td>
-                      <td className="px-4 py-4 text-sm text-white/70">{checkin.time}</td>
-                      <td className="px-4 py-4">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E87722]/10 px-3 py-1 text-xs font-medium text-[#E87722]">
-                          <CheckCircle className="h-3 w-3" />
-                          {checkin.method}
-                        </span>
-                      </td>
+                      <td className="px-4 py-4 text-sm font-mono text-white/60">{checkin.booking?.reference}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{formatDate(checkin.createdAt)}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{formatStatus(checkin.status)}</td>
+                      
                     </tr>
                   ))}
                 </tbody>
@@ -637,12 +833,12 @@ export function ClientDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((payment) => (
+                  {myPayments.map((payment) => (
                     <tr key={payment.reference} className="border-b border-white/5 transition-colors hover:bg-white/[0.02]">
-                      <td className="px-4 py-4 text-sm font-mono text-white">{payment.reference}</td>
-                      <td className="px-4 py-4 text-sm text-white/70">{payment.date}</td>
+                      <td className="px-4 py-4 text-sm font-mono text-white">{payment.paymentReference || "N/A"}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{formatBookingDate(payment.createdAt)}</td>
                       <td className="px-4 py-4 text-sm font-semibold text-white">{payment.amount}</td>
-                      <td className="px-4 py-4">{getStatusBadge(payment.status)}</td>
+                      <td className="px-4 py-4">{getStatusBadge(formatStatus(payment.status))}</td>
                       <td className="px-4 py-4 text-right">
                         <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
                           Download Receipt
@@ -915,18 +1111,26 @@ export function ClientDashboard() {
           <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6">
             <h3 className="mb-4 text-lg font-semibold text-white">Upcoming Sessions</h3>
             <div className="space-y-3">
-              {upcomingBookings.slice(0, 2).map((booking) => (
-                <div key={booking.id} className="rounded-lg bg-white/5 p-4">
-                  <div className="mb-2 flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-white">{booking.room}</p>
-                      <p className="text-xs text-white/50">{booking.date}</p>
+              {bookingsLoading ? (
+                <p className="text-sm text-white/60">Loading upcoming sessions...</p>
+              ) : bookingsError ? (
+                <p className="text-sm text-red-200">{bookingsError}</p>
+              ) : upcomingBookings.length === 0 ? (
+                <p className="text-sm text-white/60">No upcoming sessions yet.</p>
+              ) : (
+                upcomingBookings.slice(0, 2).map((booking) => (
+                  <div key={booking.id} className="rounded-lg bg-white/5 p-4">
+                    <div className="mb-2 flex items-start justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-white">{booking.room?.name || "N/A"}</p>
+                        <p className="text-xs text-white/50">{formatBookingDate(booking.date)}</p>
+                      </div>
+                      {getStatusBadge(booking.status)}
                     </div>
-                    {getStatusBadge(booking.status)}
+                    <p className="text-xs text-white/70">Booking ref: {booking.reference || booking.id}</p>
                   </div>
-                  <p className="text-xs text-white/70">{booking.time}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

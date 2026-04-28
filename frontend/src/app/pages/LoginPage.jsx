@@ -7,6 +7,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const justRegistered = searchParams.get("registered") === "1";
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const [submitError, setSubmitError] = useState("");
 
   const {
@@ -62,7 +63,7 @@ export function LoginPage() {
       localStorage.setItem("authUser", JSON.stringify(payload.user));
     }
 
-    navigate("/dashboard", { replace: true });
+    navigate(redirectTo, { replace: true });
   };
 
   return (

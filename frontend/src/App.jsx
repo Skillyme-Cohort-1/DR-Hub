@@ -1,10 +1,11 @@
 import './App.css';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
+import { BookingPaymentPage } from './app/pages/BookingPaymentPage';
 import { BookingSuccessPage } from './app/pages/BookingSuccessPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
 import ContactPage from './app/pages/ContactPage';
@@ -14,7 +15,10 @@ function isAuthenticated() {
 }
 
 function PrivateRoute({ children }) {
-  return isAuthenticated() ? children : <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (isAuthenticated()) return children;
+  const redirect = encodeURIComponent(location.pathname + location.search);
+  return <Navigate to={`/login?redirect=${redirect}`} replace />;
 }
 
 function PublicOnlyRoute({ children }) {
@@ -42,8 +46,30 @@ export default function App() {
             </PublicOnlyRoute>
           }
         />
-        <Route path="/booking" element={<BookingPage />} />
-        <Route path="/booking/success" element={<BookingSuccessPage />} />
+        <Route
+          path="/booking"
+          element={
+            <PrivateRoute>
+              <BookingPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/booking/pay"
+          element={
+            <PrivateRoute>
+              <BookingPaymentPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/booking/success"
+          element={
+            <PrivateRoute>
+              <BookingSuccessPage />
+            </PrivateRoute>
+          }
+        />
         <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected Dashboard Route */}

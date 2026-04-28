@@ -17,6 +17,7 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
 
   useEffect(() => {
     setOpen(false);
@@ -86,9 +87,15 @@ export function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Button variant="ghost" asChild className="text-white/80 hover:bg-white/10 hover:text-white">
-            <Link to="/login">Sign in</Link>
-          </Button>
+          {isLoggedIn ? (
+            <Button variant="ghost" asChild className="text-white/80 hover:bg-white/10 hover:text-white">
+              <Link to="/dashboard">Dashboard</Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" asChild className="text-white/80 hover:bg-white/10 hover:text-white">
+              <Link to="/login">Sign in</Link>
+            </Button>
+          )}
           <Button
             asChild
             className="rounded-md bg-[#E87722] px-5 text-white hover:bg-[#d96d1f]"
@@ -140,11 +147,19 @@ export function Navbar() {
             )
           )}
           <hr className="my-4 border-white/10" />
-          <Button variant="ghost" asChild className="justify-start text-white hover:bg-white/10">
-            <Link to="/login" onClick={() => setOpen(false)}>
-              Sign in
-            </Link>
-          </Button>
+          {isLoggedIn ? (
+            <Button variant="ghost" asChild className="justify-start text-white hover:bg-white/10">
+              <Link to="/dashboard" onClick={() => setOpen(false)}>
+                Dashboard
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" asChild className="justify-start text-white hover:bg-white/10">
+              <Link to="/login" onClick={() => setOpen(false)}>
+                Sign in
+              </Link>
+            </Button>
+          )}
           <Button
             asChild
             className="mt-2 justify-center rounded-md bg-[#E87722] text-white hover:bg-[#d96d1f]"

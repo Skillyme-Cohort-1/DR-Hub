@@ -22,6 +22,23 @@ const isAuthorized = (authUser, payment) => {
   return authUser.role === 'ADMIN' || payment.userId === authUser.id;
 };
 
+
+exports.createManualPayment = async (req, res) => {
+  try {
+    const { bookingId, amount, paymentType } = req.body;
+    if (!bookingId || !amount || !paymentType) {
+      return res.status(400).json({ message: 'bookingId, amount, and paymentType are required' });
+    }
+    const payment = await paymentService.createManualPayment(bookingId, amount, paymentType);
+    res.status(201).json({
+      message: 'Manual payment created successfully',
+      data: sanitizePayment(payment),
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating manual payment', error: error.message });
+  }
+};
+
 // User function: Initiate a new payment
 exports.initiatePayment = async (req, res) => {
   try {
@@ -77,7 +94,6 @@ exports.getPaymentById = async (req, res) => {
     if (!isAuthorized(req.authUser, payment)) {
       return res.status(403).json({ message: 'You do not have permission to view this payment' });
     }
-
     res.status(200).json({
       message: 'Payment retrieved successfully',
       data: sanitizePayment(payment),
@@ -112,19 +128,13 @@ exports.getPaymentByBookingId = async (req, res) => {
 // Admin function: Get all payments
 exports.getAllPayments = async (req, res) => {
   try {
-    if (req.authUser.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Only admins can view all payments' });
-    }
-
+    const where = req.authUser.role === 'ADMIN' ? {} : { userId: req.authUser.id };
     const payments = await prisma.payment.findMany({
-      include: {
-        user: true,
-        booking: true,
-      },
+      where,
     });
 
     res.status(200).json({
-      message: 'All payments retrieved successfully',
+      message: 'Payments retrieved successfully',
       data: payments.map(sanitizePayment),
     });
   } catch (error) {
@@ -226,5 +236,19 @@ exports.getPaymentStats = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching payment statistics', error: error.message });
+  }
+};
+
+
+exports.getUserPayments = async (req, res) => {
+  try {
+    const userId = req.authUser.id;
+    const payments = await paymentService.getUserPayments(userId);
+    res.status(200).json({
+      message: 'User payments retrieved successfully',
+      data: payments.map(sanitizePayment),
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching user payments', error: error.message });
   }
 };

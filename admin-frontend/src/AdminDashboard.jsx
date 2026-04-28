@@ -17,13 +17,14 @@ function normalizeBookingStatus(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "approved") return "confirmed";
   if (normalized === "cancelled") return "rejected";
-  return ["pending", "confirmed", "rejected", "completed"].includes(normalized) ? normalized : "pending";
+  if (normalized === "checked_in") return "checked in";
+  if (normalized === "no_show") return "no show"
+  return ["pending", "draft", "confirmed", "rejected", "completed"].includes(normalized) ? normalized : "pending";
 }
 
 function normalizeBookingPayment(payment) {
   const raw = String(payment?.status || payment || "").toLowerCase();
-  if (["success", "completed", "paid"].includes(raw)) return "paid";
-  return "pending";
+  return raw
 }
 
 function mapApiBookingToDashboardBooking(booking, index) {
@@ -33,7 +34,8 @@ function mapApiBookingToDashboardBooking(booking, index) {
   const isoDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : "";
   const slotTitle = typeof booking?.slot?.title === "string" && booking.slot.title.trim() ? booking.slot.title.trim() : "N/A";
   return {
-    id: booking?.reference || booking?.id || `BK${String(index + 1).padStart(3, "0")}`,
+    id: booking?.id,
+    reference: booking?.reference,
     name,
     initials: getInitials(name),
     color: BOOKING_COLORS[index % BOOKING_COLORS.length],
@@ -44,7 +46,6 @@ function mapApiBookingToDashboardBooking(booking, index) {
     slot: slotTitle,
     amount: Number(booking?.amountCharged) || 0,
     status: normalizeBookingStatus(booking?.status),
-    payment: normalizeBookingPayment(booking?.payment),
     userId: booking?.userId || booking?.user?.id || null,
     roomId: booking?.roomId || booking?.room?.id || null,
   };
@@ -363,7 +364,17 @@ export default function AdminDashboard() {
   const [search, setSearch]           = useState("");
   const [toasts, setToasts]           = useState([]);
   const [showModal, setShowModal]     = useState(false);
-  const [viewBooking, setViewBooking] = useState(null);
+  const [detailedBooking, setDetailedBooking] = useState(null);
+  const [detailedBookingLoading, setDetailedBookingLoading] = useState(false);
+  const [detailedBookingError, setDetailedBookingError] = useState("");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ paymentType: "FullPayment", amount: "" });
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [checkinAttendees, setCheckinAttendees] = useState("");
+  const [checkinSubmitting, setCheckinSubmitting] = useState(false);
+  const [checkinError, setCheckinError] = useState("");
   const [newBooking, setNewBooking]   = useState({
     name: "",
     userId: "",
@@ -427,6 +438,9 @@ export default function AdminDashboard() {
   const [roomSlotsError, setRoomSlotsError] = useState("");
   const [slotSubmitting, setSlotSubmitting] = useState(false);
   const [slotForm, setSlotForm] = useState({ title: "", slotDate: "" });
+  const [attendances, setAttendances] = useState([]);
+  const [attendancesLoading, setAttendancesLoading] = useState(false);
+  const [attendancesError, setAttendancesError] = useState("");
    // ── LEAD MODAL STATE ──
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [viewLead, setViewLead] = useState(null);
@@ -660,6 +674,7 @@ export default function AdminDashboard() {
     fetchRooms();
   }, [activeNav, roomsData.length]);
 
+  
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleSidebar = () => {
     if (isMobile) setMobileMenuOpen((o) => !o);
@@ -914,6 +929,31 @@ export default function AdminDashboard() {
      }
   };
 
+  const fetchAttendances = async () => {
+     setAttendancesLoading(true);
+     try {
+       const response = await fetch("http://localhost:3000/api/attendances", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          method: "GET",
+          contentType: "application/json",
+        },
+       });
+       const data = await response.json();
+       console.log("Fetched attendances:", data);
+       if (response.ok) {
+        setAttendances(data || []);
+        }
+     } catch (error) {
+       console.error("Error fetching attendances:", error);
+     }finally {
+      setAttendancesLoading(false);
+     }
+  };
+
+  useEffect(() => { if (activeNav !== "attendances") return;
+    fetchAttendances();
+  }, [activeNav]);
   const createRoom = async () => {
   if (!newRoomData.name.trim() || !newRoomData.capacity || newRoomData.cost === "") {
     setRoomFormError("Room name, capacity, and cost are required.");
@@ -1135,8 +1175,125 @@ export default function AdminDashboard() {
   };
   const deleteBooking = (id) => {
     setBookings(p => p.filter(b => b.id !== id));
-    setViewBooking(null);
+    setDetailedBooking(null);
     addToast("Booking removed", "orange", "🗑");
+  };
+
+  const submitManualPayment = async () => {
+    if (!detailedBooking) return;
+    if (!paymentForm.paymentType || !paymentForm.amount) {
+      setPaymentError("Payment type and amount are required.");
+      return;
+    }
+    const paymentAmount = Number(paymentForm.amount);
+    const amountCharged = Number(detailedBooking.amountCharged || 0);
+    const amountPaid = Number(detailedBooking.amountPaid || 0);
+    const balance = amountCharged - amountPaid;
+
+    if (paymentAmount <= 0) {
+      setPaymentError("Amount must be greater than zero.");
+      return;
+    }
+    if (paymentAmount > balance) {
+      setPaymentError(`Amount cannot exceed the remaining balance (Ksh ${balance.toLocaleString()}).`);
+      return;
+    }
+
+    setPaymentSubmitting(true);
+    setPaymentError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/payments/manual`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          bookingId: detailedBooking.id,
+          paymentType: paymentForm.paymentType,
+          amount: paymentAmount
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setPaymentError(data.message || "Failed to record payment.");
+        return;
+      }
+
+      addToast("Payment recorded successfully", "green", "✓");
+      setShowPaymentModal(false);
+      setPaymentForm({ paymentType: "FullPayment", amount: "" });
+      openBookingDetails(detailedBooking.id); // Refresh details
+    } catch {
+      setPaymentError("Error connecting to server.");
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
+
+  const submitCheckin = async () => {
+    if (!detailedBooking) return;
+    if (!checkinAttendees || Number(checkinAttendees) <= 0) {
+      setCheckinError("Valid number of attendees is required.");
+      return;
+    }
+    setCheckinSubmitting(true);
+    setCheckinError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/attendances/check-in`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          bookingId: detailedBooking.id,
+          numberOfAttendees: Number(checkinAttendees)
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCheckinError(data.message || "Failed to check in.");
+        return;
+      }
+      addToast("Checked in successfully", "green", "✓");
+      setShowCheckinModal(false);
+      setCheckinAttendees("");
+      openBookingDetails(detailedBooking.id);
+    } catch {
+      setCheckinError("Error connecting to server.");
+    } finally {
+      setCheckinSubmitting(false);
+    }
+  };
+
+  const openBookingDetails = async (id) => {
+    setActiveNav("booking-details");
+    setDetailedBooking(null);
+    setDetailedBookingLoading(true);
+    setDetailedBookingError("");
+
+    console.log("Booking ID for details:", id);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bookings/${id}`, {
+        method: "GET",
+        headers: { Accept: "*/*", Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setDetailedBookingError(data.message || "Failed to fetch booking details.");
+      } else {
+        setDetailedBooking(data.booking);
+      }
+    } catch {
+      setDetailedBookingError("Error connecting to server.");
+    } finally {
+      setDetailedBookingLoading(false);
+    }
   };
 
   // ── ADD BOOKING ──
@@ -1258,6 +1415,9 @@ export default function AdminDashboard() {
     const matchSearch = b.name.toLowerCase().includes(search.toLowerCase()) || b.room.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
+
+  console.log("Filtered Bookings:", filteredBookings);
+
   const filteredLeads = leads.filter(l => leadFilter === "all" || l.stage === leadFilter);
   const selectedClientBookings = selectedClient?.id
     ? bookings.filter((booking) => String(booking.userId || "") === String(selectedClient.id))
@@ -1386,6 +1546,7 @@ export default function AdminDashboard() {
               { id:"clients",       icon:"👥", label:"Clients" },
               { id:"users",         icon:"🧑", label:"Users" },
               { id:"rooms",         icon:"🏢", label:"Rooms" },
+              { id:"attendances",   icon:"✅", label:"Attendances" },
             ].map(n => (
               <button key={n.id} type="button" className={`dh-nav-item ${activeNav===n.id?"active":""}`} onClick={() => pickNav(n.id)}>
                 <span className="dh-nav-ico" aria-hidden>{n.icon}</span>
@@ -1442,6 +1603,8 @@ export default function AdminDashboard() {
                 {activeNav === "notifications" && "Notifications"}
                 {activeNav === "analytics"     && "Analytics"}
                 {activeNav === "room-details"  && "Room Details"}
+                {activeNav === "booking-details"  && "Booking Details"}
+                {activeNav === "attendances"   && "Attendances"}
               </h1>
               <p>DR Hub Admin · Wednesday, 1 April 2026</p>
               </div>
@@ -1516,7 +1679,7 @@ export default function AdminDashboard() {
                         </tr></thead>
                         <tbody>
                           {bookings.slice(0,5).map(b => (
-                            <tr key={b.id} onClick={() => setViewBooking(b)}>
+                            <tr key={b.id} onClick={() => openBookingDetails(b.id)}>
                               <td><div className="dh-client-cell"><Avatar initials={b.initials} color={b.color}/><div><div className="dh-cname">{b.name}</div><div className="dh-ctype">{b.type}</div></div></div></td>
                               <td><span className="dh-room-chip">{b.roomIcon} {b.room}</span></td>
                               <td><span className="dh-slot-badge">{b.slot}</span></td>
@@ -1524,10 +1687,15 @@ export default function AdminDashboard() {
                               <td><StatusBadge status={b.status}/></td>
                               <td onClick={e => e.stopPropagation()}>
                                 <div className="dh-actions">
-                                  {b.status === "pending" ? <>
+                                  {b.status === "pending" && (
                                     <button className="dh-action-btn btn-approve" onClick={() => approveBooking(b.id)}>✓</button>
+                                  )}
+                                  {(b.status === "pending" || b.status === "draft") && (
                                     <button className="dh-action-btn btn-reject"  onClick={() => rejectBooking(b.id)}>✗</button>
-                                  </> : <button className="dh-action-btn btn-view" onClick={() => setViewBooking(b)}>View</button>}
+                                  )}
+                                  {b.status !== "pending" && b.status !== "draft" && (
+                                    <button className="dh-action-btn btn-view" onClick={() => openBookingDetails(b.id)}>View</button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1712,31 +1880,34 @@ export default function AdminDashboard() {
                 <div className="dh-table-wrap">
                   <table className="dh-table">
                     <thead><tr>
-                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Payment</th><th>Status</th><th>Actions</th>
+                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Status</th><th>Actions</th>
                     </tr></thead>
                     <tbody>
                       {filteredBookings.length === 0 && (
                         <tr><td colSpan={9}><div className="dh-empty">No bookings match this filter</div></td></tr>
                       )}
                       {filteredBookings.map(b => (
-                        <tr key={b.id} onClick={() => setViewBooking(b)}>
-                          <td style={{color:"#888",fontSize:10}}>{b.id}</td>
+                        <tr key={b.id} onClick={() => openBookingDetails(b.id)}>
+                          <td style={{color:"#888",fontSize:10}}>{b.reference}</td>
                           <td><div className="dh-client-cell"><Avatar initials={b.initials} color={b.color}/><div><div className="dh-cname">{b.name}</div><div className="dh-ctype">{b.type}</div></div></div></td>
                           <td><span className="dh-room-chip">{b.roomIcon} {b.room}</span></td>
                           <td style={{color:"#888",fontSize:11}}>{b.date}</td>
                           <td><span className="dh-slot-badge">{b.slot}</span></td>
                           <td><span className="dh-amount">{b.amount.toLocaleString()}</span></td>
-                          <td><span className={`dh-status ${b.payment==="paid"?"s-confirmed":"s-pending"}`}>{b.payment}</span></td>
                           <td><StatusBadge status={b.status}/></td>
                           <td onClick={e => e.stopPropagation()}>
                             <div className="dh-actions">
-                              {b.status === "pending" ? <>
+                              {b.status === "pending" && (
                                 <button className="dh-action-btn btn-approve" onClick={() => approveBooking(b.id)}>✓ Approve</button>
+                              )}
+                              {(b.status === "pending" || b.status === "draft") && (
                                 <button className="dh-action-btn btn-reject"  onClick={() => rejectBooking(b.id)}>✗ Reject</button>
-                              </> : <>
-                                <button className="dh-action-btn btn-view"   onClick={() => setViewBooking(b)}>View</button>
-                                <button className="dh-action-btn btn-reject" onClick={() => deleteBooking(b.id)}>🗑</button>
-                              </>}
+                              )}
+                              {b.status !== "pending" && b.status !== "draft" && (
+                                <>
+                                  <button className="dh-action-btn btn-view"   onClick={() => openBookingDetails(b.id)}>View</button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1778,7 +1949,7 @@ export default function AdminDashboard() {
                                     onClick={() => {
                                       if (s.type === "booked") {
                                         const b = bookings.find((bk) => bk.id === s.bookingId);
-                                        if (b) setViewBooking(b);
+                                        if (b) openBookingDetails(b.id);
                                         return;
                                       }
                                       if (s.type === "available") {
@@ -1999,6 +2170,154 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── BOOKING DETAILS ── */}
+            {activeNav === "booking-details" && (
+              <div className="dh-panel">
+                <div className="dh-panel-hd">
+                  <div>
+                    <div className="dh-panel-title">Booking Details</div>
+                    <div className="dh-panel-sub">Full information about the booking</div>
+                  </div>
+                  <button className="dh-btn-primary" onClick={() => setActiveNav("bookings")}>← Back</button>
+                </div>
+                <div style={{ padding: "20px" }}>
+                  {detailedBookingLoading && <div className="dh-empty">Loading booking details...</div>}
+                  {!detailedBookingLoading && detailedBookingError && <div className="dh-empty" style={{color:"#ffb4b4"}}>{detailedBookingError}</div>}
+                  {!detailedBookingLoading && !detailedBookingError && detailedBooking && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: 20 }}>
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{detailedBooking.reference || detailedBooking.id}</div>
+                          <div style={{ color: "#888", fontSize: 12 }}>Created on {new Date(detailedBooking.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <StatusBadge status={normalizeBookingStatus(detailedBooking.status)} />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 20 }}>
+                        <div style={{ background: "rgba(255,255,255,0.02)", padding: 16, borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+                          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12, fontWeight: 600 }}>Client Information</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                            <Avatar initials={getInitials(detailedBooking.user?.name)} color="#6c63ff" size={40} />
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{detailedBooking.user?.name || "N/A"}</div>
+                              <div style={{ fontSize: 12, color: "#888" }}>{detailedBooking.user?.email || "N/A"}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ background: "rgba(255,255,255,0.02)", padding: 16, borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+                          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12, fontWeight: 600 }}>Reservation Details</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Room</div>
+                              <div style={{ fontWeight: 600 }}>{detailedBooking.room?.name || "N/A"}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Date</div>
+                              <div style={{ fontWeight: 600 }}>{detailedBooking.date ? new Date(detailedBooking.date).toLocaleDateString() : "N/A"}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Time Slot</div>
+                              <div style={{ fontWeight: 600 }}>{detailedBooking.slot?.title || "N/A"}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ background: "rgba(255,255,255,0.02)", padding: 16, borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+                          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12, fontWeight: 600 }}>Payment Summary</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Amount Charged</div>
+                              <div style={{ fontWeight: 600, color: "#F07B2B" }}>Ksh {Number(detailedBooking.amountCharged || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Amount Paid</div>
+                              <div style={{ fontWeight: 600, color: "#22C55E" }}>Ksh {Number(detailedBooking.amountPaid || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Deposit Paid</div>
+                              <div style={{ fontWeight: 600 }}>{detailedBooking.depositPaid ? "Yes" : "No"}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>Payments Count</div>
+                              <div style={{ fontWeight: 600 }}>{detailedBooking.payments?.length || 0}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                        {Number(detailedBooking.amountCharged || 0) > Number(detailedBooking.amountPaid || 0) && (
+                          <button className="dh-action-btn btn-view" style={{ padding: "10px 20px", fontSize: 13, borderColor: "#22C55E", color: "#22C55E" }} onClick={() => { 
+                            setPaymentError(""); 
+                            const initialType = detailedBooking.depositPaid ? "BalancePayment" : "Deposit";
+                            let initialAmount = "";
+                            if (initialType === "Deposit") {
+                              initialAmount = detailedBooking.user?.role === "MEMBER" ? 1000 : 2000;
+                            } else if (initialType === "BalancePayment") {
+                              initialAmount = Number(detailedBooking.amountCharged || 0) - Number(detailedBooking.amountPaid || 0);
+                            }
+                            setPaymentForm({ paymentType: initialType, amount: initialAmount }); 
+                            setShowPaymentModal(true); 
+                          }}>💳 Make Payment</button>
+                        )}
+                        {normalizeBookingStatus(detailedBooking.status) === "pending" && (
+                          <button className="dh-action-btn btn-approve" style={{ padding: "10px 20px", fontSize: 13 }} onClick={() => { approveBooking(detailedBooking.id); setDetailedBooking({...detailedBooking, status: 'confirmed'}); }}>✓ Approve Booking</button>
+                        )}
+                        {(normalizeBookingStatus(detailedBooking.status) === "pending" || normalizeBookingStatus(detailedBooking.status) === "draft") && (
+                          <button className="dh-action-btn btn-reject" style={{ padding: "10px 20px", fontSize: 13 }} onClick={() => { rejectBooking(detailedBooking.id); setDetailedBooking({...detailedBooking, status: 'rejected'}); }}>✗ Reject Booking</button>
+                        )}
+                        <button className="dh-action-btn btn-reject" style={{ padding: "10px 20px", fontSize: 13 }} onClick={() => { deleteBooking(detailedBooking.id); setActiveNav("bookings"); }}>🗑 Delete Booking</button>
+                        
+                        {normalizeBookingStatus(detailedBooking.status) !== "checked in" && (
+                          Number(detailedBooking.amountCharged || 0) <= Number(detailedBooking.amountPaid || 0) ? (
+                            <button className="dh-action-btn btn-view" style={{ padding: "10px 20px", fontSize: 13, borderColor: "#3B82F6", color: "#3B82F6" }} onClick={() => { setCheckinError(""); setCheckinAttendees(""); setShowCheckinModal(true); }}>👋 Check-in</button>
+                          ) : (
+                            <button className="dh-action-btn" style={{ padding: "10px 20px", fontSize: 13, borderColor: "#555", color: "#888", cursor: "not-allowed" }} disabled>👋 Check-in</button>
+                          )
+                        )}
+                      </div>
+                      {detailedBooking.payments && detailedBooking.payments.length > 0 && (
+                        <div style={{ background: "rgba(255,255,255,0.02)", padding: 16, borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)", marginTop: 20 }}>
+                          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12, fontWeight: 600 }}>Payments History</div>
+                          <div className="dh-table-wrap">
+                            <table className="dh-table" style={{ background: "transparent" }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ paddingLeft: 0 }}>ID</th>
+                                  <th>Type</th>
+                                  <th>Method</th>
+                                  <th>Amount</th>
+                                  <th>Date</th>
+                                  <th style={{ paddingRight: 0 }}>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {detailedBooking.payments.map((pmt, index) => (
+                                  <tr key={pmt.id} style={{ cursor: "default" }}>
+                                    <td style={{ paddingLeft: 0, fontWeight: 600 }}>{index + 1 || "-"}</td>
+                                    <td>{pmt.paymentType || "-"}</td>
+                                    <td>{pmt.paymentMethod || "-"}</td>
+                                    <td>{pmt.amount || 0}</td>
+                                    <td style={{ color: "#888", fontSize: 11 }}>{pmt.createdAt ? new Date(pmt.createdAt).toLocaleDateString() : "-"}</td>
+                                    <td style={{ paddingRight: 0 }}><StatusBadge status={pmt.status ? String(pmt.status).toLowerCase() : "pending"} /></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                      {detailedBooking.notes && (
+                        <div style={{ background: "rgba(255,255,255,0.02)", padding: 16, borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)", marginTop: 20 }}>
+                          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 8, fontWeight: 600 }}>Booking Notes</div>
+                          <div style={{ fontSize: 13, lineHeight: 1.5, color: "#ccc" }}>{detailedBooking.notes}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2297,6 +2616,91 @@ export default function AdminDashboard() {
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+)}
+
+{/* ── ROOMS ── */}
+{activeNav === "attendances" && (
+  <div className="dh-panel">
+    <div className="dh-panel-hd">
+      <div>
+        <div className="dh-panel-title">Check-Ins</div>
+        <div className="dh-panel-sub">Manage check-in operations for rooms</div>
+      </div>
+      
+    </div>
+
+    {/* Rooms Table */}
+    <div style={{ padding: "14px 20px 0" }}>
+      <input
+        className="dh-search"
+        placeholder="Search room by name or description..."
+        value={roomSearch}
+        onChange={(e) => setRoomSearch(e.target.value)}
+      />
+    </div>
+    <div className="dh-table-wrap">
+      <table className="dh-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Booking ID</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {attendancesLoading && (
+            <tr>
+              <td colSpan={6}>
+                <div className="dh-empty">Loading attendances...</div>
+              </td>
+            </tr>
+          )}
+          {!attendancesLoading && attendances
+            .filter((attendance) => {
+              const query = roomSearch.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                String(attendance.name || "").toLowerCase().includes(query) ||
+                String(attendance.bookingId || "").toLowerCase().includes(query)
+              );
+            }).length === 0 && (
+            <tr>
+              <td colSpan={6}>
+                <div className="dh-empty">No attendances found. Try another search or add a new attendance.</div>
+              </td>
+            </tr>
+          )}
+          {!attendancesLoading && attendances
+            .filter((attendance) => {
+              const query = roomSearch.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                String(attendance.name || "").toLowerCase().includes(query) ||
+                String(attendance.bookingId || "").toLowerCase().includes(query)
+              );
+            })
+            .map((attendance) => (
+              <tr key={attendance.id}>
+                <td style={{ fontWeight: 600 }}>{attendance.user.name || "-"}</td>
+                <td>{attendance.booking.reference || "-"}</td>
+
+                <td>
+                  <span className={`dh-status ${String(attendance.status || "").toLowerCase() === "checked in" ? "s-confirmed" : "s-pending"}`}>
+                    {attendance.status}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="dh-action-btn btn-reject">Check-Out</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
     </div>
   </div>
 )}
@@ -2745,49 +3149,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ── BOOKING DETAIL MODAL ── */}
-        {viewBooking && (
-          <div className="dh-modal-overlay" onClick={() => setViewBooking(null)}>
-            <div className="dh-modal" onClick={e => e.stopPropagation()}>
-              <div className="dh-modal-hd">
-                <div>
-                  <div className="dh-modal-title">Booking {viewBooking.id}</div>
-                  <StatusBadge status={viewBooking.status}/>
-                </div>
-                <button className="dh-modal-close" onClick={() => setViewBooking(null)}>✕</button>
-              </div>
-              <div className="dh-modal-body">
-                <div style={{display:"flex",alignItems:"center",gap:14,padding:"4px 0"}}>
-                  <Avatar initials={viewBooking.initials} color={viewBooking.color} size={48}/>
-                  <div>
-                    <div style={{fontSize:16,fontWeight:700}}>{viewBooking.name}</div>
-                    <div style={{fontSize:12,color:"#888",marginTop:3}}>{viewBooking.type}</div>
-                  </div>
-                </div>
-                {[
-                  ["Room",        `${viewBooking.roomIcon} ${viewBooking.room}`],
-                  ["Date",        viewBooking.date],
-                  ["Time Slot",   viewBooking.slot],
-                  ["Amount",      `Ksh ${viewBooking.amount.toLocaleString()}`],
-                  ["Payment",     viewBooking.payment],
-                ].map(([k,v]) => (
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-                    <span style={{fontSize:12,color:"#888"}}>{k}</span>
-                    <span style={{fontSize:12,fontWeight:600}}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="dh-modal-ft">
-                {viewBooking.status === "pending" && <>
-                  <button className="dh-action-btn btn-approve" style={{padding:"9px 18px",fontSize:12}} onClick={() => { approveBooking(viewBooking.id); setViewBooking(null); }}>✓ Approve</button>
-                  <button className="dh-action-btn btn-reject"  style={{padding:"9px 18px",fontSize:12}} onClick={() => { rejectBooking(viewBooking.id);  setViewBooking(null); }}>✗ Reject</button>
-                </>}
-                <button className="dh-action-btn btn-reject" style={{padding:"9px 18px",fontSize:12}} onClick={() => deleteBooking(viewBooking.id)}>🗑 Delete</button>
-                <button className="dh-btn-cancel" onClick={() => setViewBooking(null)}>Close</button>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* ── NEW BOOKING MODAL ── */}
         {showModal && (
@@ -2813,7 +3175,7 @@ export default function AdminDashboard() {
                       }}
                     >
                       <option value="">Select client</option>
-                      {memberUserOptions.map((member) => (
+                      {memberUserOptions.filter((user) => user.status === "APPROVED").map((member) => (
                         <option key={member.id} value={member.id}>
                           {member.name || member.email || member.id}
                         </option>
@@ -3227,6 +3589,120 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── MANUAL PAYMENT MODAL ── */}
+        {showPaymentModal && detailedBooking && (
+          <div className="dh-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+            <div className="dh-modal" onClick={e => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div>
+                  <div className="dh-modal-title">Record Manual Payment</div>
+                  <div className="dh-panel-sub">Booking {detailedBooking.reference || detailedBooking.id}</div>
+                </div>
+                <button className="dh-modal-close" onClick={() => setShowPaymentModal(false)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div style={{ background: "rgba(255,255,255,0.02)", padding: 12, borderRadius: 6, marginBottom: 10, fontSize: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: "#888" }}>Amount Charged:</span>
+                    <span>Ksh {Number(detailedBooking.amountCharged || 0).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: "#888" }}>Amount Paid:</span>
+                    <span style={{ color: "#22C55E" }}>Ksh {Number(detailedBooking.amountPaid || 0).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 4, marginTop: 4 }}>
+                    <span style={{ color: "#888" }}>Remaining Balance:</span>
+                    <span style={{ fontWeight: 600, color: "#F07B2B" }}>Ksh {(Number(detailedBooking.amountCharged || 0) - Number(detailedBooking.amountPaid || 0)).toLocaleString()}</span>
+                  </div>
+                </div>
+                
+                <div className="dh-form-row">
+                  <div className="dh-form-group">
+                    <label>Payment Type *</label>
+                    <select
+                      value={paymentForm.paymentType}
+                      onChange={(e) => {
+                        const newType = e.target.value;
+                        let newAmount = "";
+                        if (newType === "Deposit") {
+                          newAmount = detailedBooking.user?.role === "MEMBER" ? 1000 : 2000;
+                        } else if (newType === "FullPayment") {
+                          newAmount = Number(detailedBooking.amountCharged || 0);
+                        } else if (newType === "BalancePayment") {
+                          newAmount = Number(detailedBooking.amountCharged || 0) - Number(detailedBooking.amountPaid || 0);
+                        }
+                        setPaymentForm((p) => ({ ...p, paymentType: newType, amount: newAmount }));
+                      }}
+                    >
+                     {detailedBooking.depositPaid ? (
+                      <>
+                        <option value="BalancePayment">Balance Payment</option>
+                      </>
+                     ) : (  
+                      <>
+                      <option value="Deposit">Deposit</option>
+                      <option value="FullPayment">Full Payment</option>
+                      </>
+                     )}
+                    </select>
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Amount (Ksh) *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Enter amount"
+                      value={paymentForm.amount }
+                      onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                {paymentError && <div style={{ color: "#ffb4b4", fontSize: 12 }}>{paymentError}</div>}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setShowPaymentModal(false)}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitManualPayment} disabled={paymentSubmitting}>
+                  {paymentSubmitting ? "Recording..." : "Record Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CHECKIN MODAL ── */}
+        {showCheckinModal && detailedBooking && (
+          <div className="dh-modal-overlay" onClick={() => setShowCheckinModal(false)}>
+            <div className="dh-modal" onClick={e => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div>
+                  <div className="dh-modal-title">Check-in Attendees</div>
+                  <div className="dh-panel-sub">Booking {detailedBooking.reference || detailedBooking.id}</div>
+                </div>
+                <button className="dh-modal-close" onClick={() => setShowCheckinModal(false)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-group">
+                  <label>Number of Attendees *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Enter number of attendees"
+                    value={checkinAttendees}
+                    onChange={(e) => setCheckinAttendees(e.target.value)}
+                  />
+                </div>
+                {checkinError && <div style={{ color: "#ffb4b4", fontSize: 12, marginTop: 10 }}>{checkinError}</div>}
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setShowCheckinModal(false)}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitCheckin} disabled={checkinSubmitting}>
+                  {checkinSubmitting ? "Checking in..." : "Confirm Check-in"}
+                </button>
+              </div>
             </div>
           </div>
         )}

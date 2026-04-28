@@ -32,24 +32,21 @@ const BookingDate = z.string({
     return selected <= maxDate;
   }, { message: 'Bookings cannot be made more than 90 days in advance' });
 
-// CREATE BOOKING SCHEMA
+// CREATE BOOKING SCHEMA (logged-in user)
 const createBookingSchema = z.object({
-  name: z.string({
-    required_error: 'name is required'
-  }).min(2, { message: 'name must be at least 2 characters' })
-    .max(100, { message: 'name cannot exceed 100 characters' }),
-
-  email: z.string({
-    required_error: 'email is required'
-  }).email({ message: 'Invalid email address' }),
-
   roomId: z.string({
     required_error: 'roomId is required'
   }).cuid({ message: 'Invalid roomId format' }),
-
-  date: BookingDate,
-
-  slot: TimeSlot
+  slotId: z.string({
+    required_error: 'slotId is required'
+  }).cuid({ message: 'Invalid slotId format' }),
+  bookingDate: BookingDate,
+  totalCost: z.coerce.number({
+    required_error: 'totalCost is required'
+  }).int({ message: 'totalCost must be a whole number' }).positive({ message: 'totalCost must be greater than 0' }),
+  numberOfAttendees: z.coerce.number({
+    required_error: 'numberOfAttendees is required'
+  }).int({ message: 'numberOfAttendees must be a whole number' }).positive({ message: 'numberOfAttendees must be greater than 0' })
 });
 
 const createNonUserBookingSchema = z.object({
