@@ -30,8 +30,8 @@ export const SpaceCard = ({
             onClick={handleSelect}
             className={`relative flex w-full cursor-pointer gap-4 border p-3 text-left transition-colors duration-200 ${
                 isSelected
-                    ? 'border-[#EC7B1D] bg-[#1a120d]'
-                    : 'border-[#8a4f1f] bg-[#06080c] hover:border-[#EC7B1D]'
+                    ? 'border-[#EC7B1D] bg-[#1C2A3F]'
+                    : 'border-slate-600 bg-[#0B1526] hover:border-[#EC7B1D]'
             }`}
             aria-pressed={isSelected}
         >

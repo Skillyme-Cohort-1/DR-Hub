@@ -20,11 +20,12 @@ class BookingSlotService {
   
   // Create new booking slot
   async createBookingSlot(data) {
-    const { title, roomId, slotDate } = data
+
+    const { title, roomId, slotDate, fullDay } = data
     
     // Validate
     if (!title || !roomId || !slotDate) {
-      throw new Error('Title, Room ID and slot date are required')
+      throw new Error('Title, Room ID, slot date and fullDay are required')
     }
 
     // Accept both date-only (YYYY-MM-DD) and full ISO datetime inputs.
@@ -48,6 +49,7 @@ class BookingSlotService {
       where: {
         roomId,
         slotDate: normalizedSlotDate,
+        fullDay: fullDay || false,
         title: { equals: title, mode: 'insensitive' }
       }
     })
@@ -61,7 +63,8 @@ class BookingSlotService {
         title: title,
         roomId: roomId,
         booked: false,
-        slotDate: normalizedSlotDate
+        slotDate: normalizedSlotDate,
+        fullDay: fullDay || false
       }
     })
   }

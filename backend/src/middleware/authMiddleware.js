@@ -28,7 +28,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ message: 'Invalid authentication token.' });
     }
 
-    if (user.status !== 'ACTIVE') {
+    if (!['ACTIVE', 'APPROVED'].includes(user.status)) {
       return res.status(403).json({ message: 'User account is not active.' });
     }
 

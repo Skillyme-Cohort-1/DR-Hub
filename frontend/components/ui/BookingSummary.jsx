@@ -11,7 +11,7 @@ export const BookingSummary = ({
     const total = Number(subtotal) + Number(bookingFee);
 
     return (
-        <section className="h-full border border-gray-900 p-5 md:p-6 flex flex-col">
+        <section className="h-full border border-slate-700/50 p-5 md:p-6 flex flex-col">
             <h2 className="text-lg font-semibold tracking-[0.12em] text-slate-100 uppercase">Booking Summary</h2>
 
             <div className="mt-5 flex flex-1 flex-col justify-between">
@@ -26,7 +26,7 @@ export const BookingSummary = ({
                         <p className="mt-1 text-lg font-semibold text-white">{rateType}</p>
                     </div>
 
-                    <hr className="border-slate-800" />
+                    <hr className="border-slate-700/50" />
 
                     <div className="space-y-3 text-lg">
                         <div className="flex items-center justify-between text-slate-300">
@@ -39,7 +39,7 @@ export const BookingSummary = ({
                         </div>
                     </div>
 
-                    <hr className="border-slate-800" />
+                    <hr className="border-slate-700/50" />
 
                     <div className="flex items-center justify-between">
                         <span className="text-xl font-semibold text-slate-100">Total</span>
@@ -47,7 +47,7 @@ export const BookingSummary = ({
                     </div>
                 </div>
 
-                <div className="mt-4 border-t border-slate-800 pt-4 flex items-start gap-3 w-full text-base leading-snug text-slate-400">
+                <div className="mt-4 border-t border-slate-700/50 pt-4 flex items-start gap-3 w-full text-base leading-snug text-slate-400">
                     <Lock aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-gray-500" strokeWidth={1.8} />
                     <p>Secure booking. Confirmation sent by email & SMS.</p>
                 </div>
