@@ -40,6 +40,12 @@ const testimonials = [
 const amenityImage =
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80";
 
+function bookingHref() {
+  return localStorage.getItem("isLoggedIn") === "true"
+    ? "/booking"
+    : "/login?redirect=%2Fbooking";
+}
+
 export default function HomePage() {
   const steps = [
     {
@@ -99,7 +105,7 @@ export default function HomePage() {
                   asChild
                   className="h-auto rounded-md bg-[#E87722] px-8 py-4 text-base text-white shadow-lg shadow-[#E87722]/20 hover:bg-[#d96d1f]"
                 >
-                  <Link to="/booking" className="inline-flex items-center gap-2">
+                  <Link to={bookingHref()} className="inline-flex items-center gap-2">
                     Book a space
                     <ArrowRight className="h-5 w-5" aria-hidden />
                   </Link>
@@ -172,7 +178,7 @@ export default function HomePage() {
                         asChild
                         className="w-full rounded-md bg-[#E87722] py-6 text-base text-white hover:bg-[#d96d1f]"
                       >
-                        <Link to="/booking">Book this room</Link>
+                        <Link to={bookingHref()}>Book this room</Link>
                       </Button>
                     </CardContent>
                   </Card>
@@ -327,7 +333,7 @@ export default function HomePage() {
               asChild
               className="mt-10 h-auto rounded-md bg-black px-8 py-4 text-base text-white hover:bg-black/90"
             >
-              <Link to="/booking" className="inline-flex items-center gap-2">
+              <Link to={bookingHref()} className="inline-flex items-center gap-2">
                 Book now
                 <ChevronRight className="h-5 w-5" aria-hidden />
               </Link>

@@ -1,0 +1,14 @@
+-- AlterEnum
+ALTER TYPE "Role" ADD VALUE 'NON_MEMBER';
+
+-- AlterEnum
+ALTER TYPE "UserStatus" ADD VALUE 'APPROVED';
+ALTER TYPE "UserStatus" ADD VALUE 'DECLINED';
+
+-- AlterEnum
+ALTER TYPE "BookingStatus" ADD VALUE 'DRAFT';
+
+-- AlterTable
+ALTER TABLE "BookSlot"
+ADD COLUMN "blocked" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "fullDay" BOOLEAN NOT NULL DEFAULT false;

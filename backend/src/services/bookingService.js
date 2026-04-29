@@ -49,6 +49,8 @@ function sanitizeBooking(booking) {
         slot:          booking.slot,
         status:        booking.status,
         amountCharged: booking.amountCharged,
+        depositPaid:  booking.depositPaid,
+        amountPaid:   booking.amountPaid,
         notes:         booking.notes || null,
         room: booking.room ? {
             id:   booking.room.id,
@@ -58,11 +60,14 @@ function sanitizeBooking(booking) {
             id:    booking.user.id,
             name:  booking.user.name,
             email: booking.user.email,
+            role:  booking.user.role
         } : null,
-        payment: booking.payment ? {
+        payments: booking.payment ? {
             id:          booking.payment.id,
             status:      booking.payment.status,
-            providerRef: booking.payment.providerRef || null
+            providerReference: booking.payment.providerReference || null,
+            paymentLink: booking.payment.paymentLink || null,
+            amount:     booking.payment.amount || null,
         } : null,
         userId:    booking.userId,
         roomId:    booking.roomId,
@@ -115,76 +120,101 @@ async function checkAvailability({ roomId, date, slot, room = null }) {
     return { available: true, roomId, date, slot };
 }
 
-async function createBooking({ roomId, date, slot, name, email }) {
-    const user = await findOrCreateUser({ name, email });
+async function createBooking({ userId, roomId, slotId, bookingDate, totalCost, numberOfAttendees }) {
+    const normalizedDate = new Date(bookingDate);
 
-    const room = await roomService.getRoomById(roomId);
-    if (!room)           throw new Error('ROOM_NOT_FOUND');
-    if (!room.is_active) throw new Error('ROOM_INACTIVE');
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, status: true }
+    });
+    if (!user) throw new Error('USER_NOT_FOUND');
+    if (!['ACTIVE', 'APPROVED'].includes(user.status)) throw new Error('USER_NOT_ACTIVE');
+
+    const room = await prisma.room.findUnique({
+        where: { id: roomId }
+    });
+    if (!room) throw new Error('ROOM_NOT_FOUND');
+    if (!room.isActive) throw new Error('ROOM_INACTIVE');
 
     const approvedDocument = await prisma.userDocument.findFirst({
         where: { userId: user.id, status: 'APPROVED' }
     });
+    if (!approvedDocument) throw new Error('NO_APPROVED_DOCUMENT');
 
-    if (!approvedDocument) {
-        throw new Error('NO_APPROVED_DOCUMENT');
+    const slot = await prisma.bookSlot.findFirst({
+        where: { id: slotId, roomId }
+    });
+    if (!slot) throw new Error('SLOT_NOT_FOUND');
+    if (slot.blocked) throw new Error('SLOT_BLOCKED');
+    if (slot.booked) throw new Error('SLOT_UNAVAILABLE');
+    if (slot.slotDate && new Date(slot.slotDate).toDateString() !== normalizedDate.toDateString()) {
+        throw new Error('SLOT_DATE_MISMATCH');
     }
 
-    const availability = await checkAvailability({ roomId, date, slot, room });
-    if (!availability.available) {
-        throw new Error('SLOT_UNAVAILABLE');
-    }
+    const activeBookingOnSlot = await prisma.booking.findFirst({
+        where: { slotId, status: { in: ['PENDING', 'CONFIRMED'] } },
+        select: { id: true }
+    });
+    if (activeBookingOnSlot) throw new Error('SLOT_UNAVAILABLE');
 
-    const amountCharged = room.cost;
-    if (!amountCharged) {
-        throw new Error('ROOM_COST_NOT_SET');
-    }
+    if (!room.cost) throw new Error('ROOM_COST_NOT_SET');
+    if (totalCost !== room.cost) throw new Error('INVALID_TOTAL_COST');
 
     let reference;
     let referenceIsUnique = false;
-
     while (!referenceIsUnique) {
-        reference      = generateBookingReference();
+        reference = generateBookingReference();
         const existing = await prisma.booking.findUnique({ where: { reference } });
         if (!existing) referenceIsUnique = true;
     }
 
     let booking;
     try {
-        booking = await prisma.booking.create({
-            data: {
-                reference,
-                date:   new Date(date),
-                slot,
-                status: 'PENDING',
-                amountCharged,
-                userId: user.id,
-                roomId
-            },
-            include: {
-                room:    { select: { id: true, name: true } },
-                user:    { select: { id: true, name: true, email: true } },
-                payment: true
-            }
+        booking = await prisma.$transaction(async (tx) => {
+            const createdBooking = await tx.booking.create({
+                data: {
+                    reference,
+                    date: normalizedDate,
+                    status: 'DRAFT',
+                    amountCharged: totalCost,
+                    depositPaid: false,
+                    amountPaid: 0,
+                    notes: `Self booking. Attendees: ${numberOfAttendees}`,
+                    userId: user.id,
+                    roomId,
+                    slotId
+                }
+            });
+
+            await tx.bookSlot.update({
+                where: { id: slotId },
+                data: { booked: true }
+            });
+
+            return createdBooking;
         });
     } catch (error) {
         if (error.code === 'P2002') {
-            throw new Error('SLOT_UNAVAILABLE');
+            const targets = Array.isArray(error.meta?.target) ? error.meta.target : [String(error.meta?.target || '')];
+            if (targets.some((target) => String(target).includes('slotId'))) {
+                throw new Error('SLOT_UNAVAILABLE');
+            }
         }
         throw error;
     }
 
-    // Send payment instructions email
     try {
-        await sendBookingPendingEmail({
-            to:        user.email,
-            name:      user.name,
-            reference: booking.reference,
-            roomName:  room.name,
-            date:      new Date(booking.date).toDateString(),
-            slot:      booking.slot,
-            amountDue: formatAmountKES(booking.amountCharged)
-        });
+        if (user.email) {
+            await sendBookingPendingEmail({
+                to: user.email,
+                name: user.name || 'Customer',
+                reference: booking.reference,
+                roomName: room.name,
+                date: new Date(booking.date).toDateString(),
+                slot: slot.title,
+                amountDue: formatAmountKES(booking.amountCharged)
+            });
+        }
     } catch (emailError) {
         console.error(`[BOOKING] Email notification failed for ${booking.reference}:`, emailError.message);
     }
@@ -315,7 +345,7 @@ async function createNonUserBooking({
                 include: {
                     room: { select: { id: true, name: true } },
                     user: { select: { id: true, name: true, email: true } },
-                    payment: true
+                    payments: { select: { id: true, status: true, paymentReference: true } }
                 }
             });
 
@@ -412,7 +442,7 @@ async function createAdminUserBooking({
         select: { id: true, name: true, email: true, status: true }
     });
     if (!user) throw new Error('USER_NOT_FOUND');
-    if (user.status !== 'ACTIVE') throw new Error('USER_NOT_ACTIVE');
+    if (!['ACTIVE', 'APPROVED'].includes(user.status)) throw new Error('USER_NOT_ACTIVE');
 
     const slot = await prisma.bookSlot.findFirst({
         where: {
@@ -450,9 +480,9 @@ async function createAdminUserBooking({
                 data: {
                     reference,
                     date: normalizedDate,
-                    status: 'PENDING',
+                    status: 'DRAFT',
                     amountCharged: totalCost,
-                    notes: `Admin booking for user ${userId}. Attendees: ${numberOfAttendees}`,
+                    notes: `Admin booking for user ${user.name}. Attendees: ${numberOfAttendees}`,
                     userId,
                     roomId,
                     slotId
@@ -460,7 +490,7 @@ async function createAdminUserBooking({
                 include: {
                     room: { select: { id: true, name: true } },
                     user: { select: { id: true, name: true, email: true } },
-                    payment: true
+                    payments: { select: { id: true, status: true, paymentReference: true } }
                 }
             });
 
@@ -510,26 +540,28 @@ async function getBookingsByUser(userId) {
         include: {
             room:    { select: { id: true, name: true } },
             user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, providerRef: true } }
+            payments: { select: { id: true, status: true, paymentReference: true } }
         },
         orderBy: { createdAt: 'desc' }
     });
 
-    return bookings.map(sanitizeBooking);
+    return bookings;
 }
+
 
 async function getBookingById(id) {
     const booking = await prisma.booking.findUnique({
         where:   { id },
         include: {
             room:    { select: { id: true, name: true } },
-            user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, providerRef: true } }
+            user:    { select: { id: true, name: true, email: true, role: true } },
+            payments: { select: { id: true, status: true, paymentReference: true, paymentType: true, createdAt: true, recordMethod: true, paymentMethod: true, amount: true } },
+            slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
         }
     });
 
     if (!booking) return null;
-    return sanitizeBooking(booking);
+    return booking;
 }
 
 async function getAllBookings({ status, roomId, date } = {}) {
@@ -543,14 +575,13 @@ async function getAllBookings({ status, roomId, date } = {}) {
         where,
         include: {
             room:    { select: { id: true, name: true } },
-            user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, paymentReference: true, paymentLink: true } },
-            slot: { select: { id: true, title: true, slotDate: true, booked: true } }
+            user:    { select: { id: true, name: true, email: true, role: true } },
+            slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
         },
         orderBy: { createdAt: 'desc' }
     });
 
-    return bookings.map(sanitizeBooking);
+    return bookings;
 }
 
 // Cancel / update 
@@ -582,14 +613,15 @@ async function cancelBooking({ bookingId, reason, cancelledBy }) {
         include: {
             room:    { select: { id: true, name: true } },
             user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, providerRef: true } }
+            payments: { select: { id: true, status: true, paymentReference: true } },
+            slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
         }
     });
 
     return sanitizeBooking(updated);
 }
 
-async function updateBookingStatus({ bookingId, status, updatedBy }) {
+async function updateBookingStatus({ bookingId, status }) {
     const booking = await prisma.booking.findUnique({
         where: { id: bookingId }
     });
@@ -606,13 +638,14 @@ async function updateBookingStatus({ bookingId, status, updatedBy }) {
         data:  {
             status,
             notes: booking.notes
-                ? `${booking.notes} | Status updated to ${status} by ${updatedBy}`
-                : `Status updated to ${status} by ${updatedBy}`
+                ? `${booking.notes} | Status updated to ${status} by ${req.user.name}`
+                : `Status updated to ${status} by ${req.user.name}`
         },
         include: {
             room:    { select: { id: true, name: true } },
             user:    { select: { id: true, name: true, email: true } },
-            payment: { select: { id: true, status: true, providerRef: true } }
+            payments: { select: { id: true, status: true, paymentReference: true } },
+            slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
         }
     });
 
