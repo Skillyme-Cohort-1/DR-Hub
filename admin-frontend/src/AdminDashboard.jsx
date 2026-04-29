@@ -1,44 +1,119 @@
 import { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "./config/api";
 import { useAuth } from "./context/AuthContext.jsx";
+import { useTheme } from "./context/ThemeContext.jsx";   // ← ADD THIS LINE
 
 const SIDEBAR_BREAKPOINT = 960;
 
-// ─── MOCK DATA ───────────────────────────────────────────────────────────────
-const INITIAL_BOOKINGS = [
-  { id: "BK001", name: "Jane Mwangi",    initials: "JM", color: "#6c63ff", type: "ADR Practitioner", room: "Private Office", roomIcon: "🏛️", date: "2026-04-01", slot: "10am–1pm", amount: 6000,  status: "pending",   payment: "paid",    doc: true  },
-  { id: "BK002", name: "David Kamau",    initials: "DK", color: "#059669", type: "Young Advocate",   room: "Boardroom",      roomIcon: "📋", date: "2026-04-01", slot: "2pm–5pm",  amount: 2500,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK003", name: "Amina Ochieng",  initials: "AO", color: "#F07B2B", type: "DR Hub Member",    room: "Private Office", roomIcon: "🏛️", date: "2026-04-02", slot: "10am–1pm", amount: 2000,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK004", name: "Brian Njoroge",  initials: "BN", color: "#3B82F6", type: "ADR Practitioner", room: "Combined",       roomIcon: "⚖️",  date: "2026-04-02", slot: "2pm–5pm",  amount: 7500,  status: "pending",   payment: "pending", doc: true  },
-  { id: "BK005", name: "Faith Wanjiku",  initials: "FW", color: "#7C3AED", type: "Young Advocate",   room: "Boardroom",      roomIcon: "📋", date: "2026-04-03", slot: "5pm–8pm",  amount: 4000,  status: "completed", payment: "paid",    doc: true  },
-  { id: "BK006", name: "Samuel Mutua",   initials: "SM", color: "#EC4899", type: "ADR Practitioner", room: "Private Office", roomIcon: "🏛️", date: "2026-04-03", slot: "10am–1pm", amount: 6000,  status: "pending",   payment: "paid",    doc: false },
-  { id: "BK007", name: "Lydia Ndungu",   initials: "LN", color: "#0891b2", type: "DR Hub Member",    room: "Boardroom",      roomIcon: "📋", date: "2026-04-04", slot: "2pm–5pm",  amount: 2000,  status: "confirmed", payment: "paid",    doc: true  },
-  { id: "BK008", name: "Peter Otieno",   initials: "PO", color: "#16a34a", type: "Young Advocate",   room: "Combined",       roomIcon: "⚖️",  date: "2026-04-04", slot: "10am–1pm", amount: 7500,  status: "rejected",  payment: "pending", doc: true  },
-];
+// ─── API-DERIVED UI CONFIG ───────────────────────────────────────────────────
+const BOOKING_COLORS = ["#6c63ff", "#059669", "#F07B2B", "#3B82F6", "#7C3AED", "#EC4899", "#0891b2", "#16a34a"];
 
-const INITIAL_LEADS = [
-  { id: 1, name: "Samuel Mutua",  initials: "SM", color: "#6c63ff", stage: "new",       phone: "+254 712 111 222", note: "" },
-  { id: 2, name: "Lydia Ndungu",  initials: "LN", color: "#F07B2B", stage: "follow-up", phone: "+254 723 333 444", note: "Called twice, interested in boardroom" },
-  { id: 3, name: "Peter Otieno",  initials: "PO", color: "#22C55E", stage: "converted", phone: "+254 734 555 666", note: "Booked Private Office for April" },
-  { id: 4, name: "Grace Akinyi",  initials: "GA", color: "#3B82F6", stage: "new",       phone: "+254 745 777 888", note: "" },
-];
+function getRoomIcon(roomName) {
+  if (roomName === "Private Office") return "🏛️";
+  if (roomName === "Boardroom") return "📋";
+  return "⚖️";
+}
 
-const SLOTS = ["10am–1pm", "2pm–5pm", "5pm–8pm"];
-const ROOMS = ["Private Office", "Boardroom", "Combined"];
-const DAYS  = ["Mon 30 Mar", "Tue 31 Mar", "Wed 1 Apr", "Thu 2 Apr", "Fri 3 Apr"];
-const DUMMY_CLIENT_BOOKINGS = [
-  { id: "BK901", room: "Private Office", date: "2026-04-10", slot: "10am–1pm", status: "confirmed", amount: 6000 },
-  { id: "BK902", room: "Boardroom", date: "2026-04-14", slot: "2pm–5pm", status: "pending", amount: 2500 },
-];
+function normalizeBookingStatus(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "approved") return "confirmed";
+  if (normalized === "cancelled") return "rejected";
+  return ["pending", "confirmed", "rejected", "completed"].includes(normalized) ? normalized : "pending";
+}
+
+function normalizeBookingPayment(payment) {
+  const raw = String(payment?.status || payment || "").toLowerCase();
+  if (["success", "completed", "paid"].includes(raw)) return "paid";
+  return "pending";
+}
+
+function mapApiBookingToDashboardBooking(booking, index) {
+  const name = booking?.user?.name || "Unknown Client";
+  const roomName = booking?.room?.name || "Combined";
+  const parsedDate = booking?.date ? new Date(booking.date) : null;
+  const isoDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : "";
+  const slotTitle = typeof booking?.slot?.title === "string" && booking.slot.title.trim() ? booking.slot.title.trim() : "N/A";
+  return {
+    id: booking?.reference || booking?.id || `BK${String(index + 1).padStart(3, "0")}`,
+    name,
+    initials: getInitials(name),
+    color: BOOKING_COLORS[index % BOOKING_COLORS.length],
+    type: "Member",
+    room: roomName,
+    roomIcon: getRoomIcon(roomName),
+    date: isoDate,
+    slot: slotTitle,
+    amount: Number(booking?.amountCharged) || 0,
+    status: normalizeBookingStatus(booking?.status),
+    payment: normalizeBookingPayment(booking?.payment),
+    userId: booking?.userId || booking?.user?.id || null,
+    roomId: booking?.roomId || booking?.room?.id || null,
+  };
+}
+
+function formatCalendarDayLabel(isoDate) {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  const weekDay = parsed.toLocaleDateString("en-US", { weekday: "short" });
+  const month = parsed.toLocaleDateString("en-US", { month: "short" });
+  return `${weekDay} ${parsed.getDate()} ${month}`;
+}
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+    :root, [data-theme="dark"] {
+    --bg-base: #0a0a0a;
+    --bg-panel: #1E1E1E;
+    --bg-sidebar: linear-gradient(180deg, #141414 0%, #101010 100%);
+    --bg-topbar: rgba(18,18,18,0.92);
+    --bg-input: rgba(255,255,255,0.05);
+    --bg-hover: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.07);
+    --border-input: rgba(255,255,255,0.10);
+    --text-primary: #F0EDE8;
+    --text-muted: #888888;
+    --orange: #F07B2B;
+    --orange-dim: rgba(240,123,43,0.12);
+    --green: #22C55E;
+    --green-dim: rgba(34,197,94,0.12);
+    --yellow: #F59E0B;
+    --yellow-dim: rgba(245,158,11,0.12);
+    --red: #EF4444;
+    --red-dim: rgba(239,68,68,0.12);
+    --blue: #3B82F6;
+    --blue-dim: rgba(59,130,246,0.12);
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  [data-theme="light"] {
+  --bg-base: #F5F4F0;
+  --bg-panel: #FFFFFF;
+  --bg-sidebar: #FAFAFA;
+  --bg-topbar: rgba(248,248,248,0.95);
+  --bg-input: rgba(0,0,0,0.04);
+  --bg-hover: rgba(0,0,0,0.04);
+  --border: rgba(0,0,0,0.08);
+  --border-input: rgba(0,0,0,0.12);
+  --text-primary: #1a1a1a;
+  --text-muted: #666666;
+  --orange: #E06820;
+  --orange-dim: rgba(224,104,32,0.10);
+  --green: #16A34A;
+  --green-dim: rgba(22,163,74,0.10);
+  --yellow: #D97706;
+  --yellow-dim: rgba(217,119,6,0.10);
+  --red: #DC2626;
+  --red-dim: rgba(220,38,38,0.10);
+  --blue: #2563EB;
+  --blue-dim: rgba(37,99,235,0.10);
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
   .dh-wrap * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
-  .dh-wrap { display: flex; width: 100%; min-height: 100vh; min-height: 100dvh; background: #0a0a0a; color: #F0EDE8; overflow: hidden; font-size: 13px; }
+  .dh-wrap { display: flex; width: 100%; min-height: 100vh; min-height: 100dvh; background: var(--bg-base); color: var(--text-primary); overflow: hidden; font-size: 13px; }
 
   /* SIDEBAR */
-  .dh-sidebar { width: 248px; flex-shrink: 0; background: linear-gradient(180deg, #141414 0%, #101010 100%); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; transition: width 0.22s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
+  .dh-sidebar { width: 248px; flex-shrink: 0; background: var(--bg-sidebar); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; transition: width 0.22s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
   .dh-sidebar--collapsed { width: 72px; }
   .dh-sidebar--collapsed .dh-logo-the,
   .dh-sidebar--collapsed .dh-logo-badge,
@@ -53,35 +128,35 @@ const css = `
   .dh-sidebar--collapsed .dh-user { justify-content: center; padding: 14px 10px; }
   .dh-sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 90; backdrop-filter: blur(2px); }
   .dh-sidebar-backdrop--visible { display: block; }
-  .dh-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-  .dh-logo-the { font-size: 10px; letter-spacing: 3px; color: #888; text-transform: uppercase; }
+  .dh-logo { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+  .dh-logo-the { font-size: 10px; letter-spacing: 3px; color: var(--text-muted); text-transform: uppercase; }
   .dh-logo-dr { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 900; line-height: 1; }
   .dh-logo-dr span { color: #F07B2B; }
   .dh-logo-badge { display: inline-block; background: rgba(240,123,43,0.12); color: #F07B2B; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; margin-top: 6px; border: 1px solid rgba(240,123,43,0.2); }
   .dh-nav { flex: 1; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
   .dh-nav-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #555; padding: 10px 10px 4px; font-weight: 600; }
-  .dh-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; color: #888; font-size: 12px; font-weight: 500; border: 1px solid transparent; transition: all 0.15s; width: 100%; text-align: left; background: transparent; font-family: inherit; }
+  .dh-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; color: var(--text-muted); font-size: 12px; font-weight: 500; border: 1px solid transparent; transition: all 0.15s; width: 100%; text-align: left; background: transparent; font-family: inherit; }
   .dh-nav-ico { font-size: 15px; line-height: 1; flex-shrink: 0; width: 22px; text-align: center; }
   .dh-nav-text { flex: 1; min-width: 0; }
-  .dh-nav-item:hover { background: rgba(255,255,255,0.04); color: #F0EDE8; }
+  .dh-nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
   .dh-nav-item.active { background: rgba(240,123,43,0.12); color: #F07B2B; border-color: rgba(240,123,43,0.15); }
   .dh-nav-count { margin-left: auto; background: #F07B2B; color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 20px; }
   .dh-user { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; gap: 10px; }
   .dh-av { width: 32px; height: 32px; border-radius: 50%; background: #F07B2B; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
 
   /* MAIN */
-  .dh-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: #0a0a0a; }
-  .dh-topbar { padding: 14px 20px 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; background: rgba(18,18,18,0.92); backdrop-filter: blur(12px); flex-shrink: 0; gap: 12px; }
+  .dh-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: var(--bg-base); }
+  .dh-topbar { padding: 14px 20px 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg-topbar); backdrop-filter: blur(12px); flex-shrink: 0; gap: 12px; }
   .dh-topbar-left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; flex: 1; }
-  .dh-menu-toggle { flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #F0EDE8; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background 0.15s, border-color 0.15s; }
+  .dh-menu-toggle { flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background 0.15s, border-color 0.15s; }
   .dh-menu-toggle:hover { background: rgba(240,123,43,0.12); border-color: rgba(240,123,43,0.35); }
   .dh-menu-toggle:focus-visible { outline: 2px solid #F07B2B; outline-offset: 2px; }
   .dh-topbar-titles { min-width: 0; }
   .dh-topbar h1 { font-size: clamp(15px, 2.5vw, 18px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
-  .dh-topbar p { font-size: 11px; color: #888; margin-top: 3px; }
+  .dh-topbar p { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
   .dh-topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .dh-chip { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 7px 12px; font-size: 11px; color: #888; }
-  .dh-notif { width: 34px; height: 34px; background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; position: relative; transition: border-color 0.2s; }
+  .dh-chip { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; font-size: 11px; color: var(--text-muted); }
+  .dh-notif { width: 34px; height: 34px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; position: relative; transition: border-color 0.2s; }
   .dh-notif:hover { border-color: #F07B2B; }
   .dh-notif-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: #F07B2B; border-radius: 50%; border: 1.5px solid #161616; }
   .dh-btn-primary { background: #F07B2B; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
@@ -94,12 +169,12 @@ const css = `
 
   /* STATS */
   .dh-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
-  .dh-stat { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; cursor: default; transition: border-color 0.2s; }
+  .dh-stat { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; cursor: default; transition: border-color 0.2s; }
   .dh-stat:hover { border-color: rgba(255,255,255,0.15); }
   .dh-stat-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   .dh-stat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
   .dh-stat-num { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
-  .dh-stat-label { font-size: 11px; color: #888; }
+  .dh-stat-label { font-size: 11px; color: var(--text-muted); }
   .dh-badge-up { background: rgba(34,197,94,0.12); color: #22C55E; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
   .dh-badge-warn { background: rgba(245,158,11,0.12); color: #F59E0B; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
 
@@ -107,17 +182,17 @@ const css = `
   .dh-grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px; margin-bottom: 18px; align-items: stretch; }
   .dh-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; }
   .dh-leads-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 20px; }
-  .dh-panel { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden; }
-  .dh-panel-hd { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; justify-content: space-between; align-items: center; }
+  .dh-panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .dh-panel-hd { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
   .dh-panel-title { font-size: 13px; font-weight: 600; }
-  .dh-panel-sub { font-size: 11px; color: #888; margin-top: 2px; }
+  .dh-panel-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   .dh-panel-link { font-size: 11px; color: #F07B2B; cursor: pointer; font-weight: 500; background: none; border: none; transition: opacity 0.2s; }
   .dh-panel-link:hover { opacity: 0.7; }
 
   /* TABLE */
   .dh-table-wrap { overflow-x: auto; }
   table.dh-table { width: 100%; border-collapse: collapse; }
-  .dh-table thead th { padding: 9px 14px; text-align: left; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: #888; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap; }
+  .dh-table thead th { padding: 9px 14px; text-align: left; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; cursor: pointer; }
   .dh-table tbody tr:last-child { border-bottom: none; }
   .dh-table tbody tr:hover { background: rgba(255,255,255,0.02); }
@@ -125,9 +200,9 @@ const css = `
   .dh-client-cell { display: flex; align-items: center; gap: 9px; }
   .dh-cav { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; }
   .dh-cname { font-weight: 600; font-size: 12px; }
-  .dh-ctype { font-size: 10px; color: #888; }
-  .dh-room-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-  .dh-slot-badge { font-size: 10px; color: #888; background: rgba(255,255,255,0.04); padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+  .dh-ctype { font-size: 10px; color: var(--text-muted); }
+  .dh-room-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .dh-slot-badge { font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
   .dh-amount { font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 700; color: #F07B2B; }
   .dh-status { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
   .dh-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
@@ -141,22 +216,23 @@ const css = `
   .btn-approve:hover { background: #22C55E; color: #fff; border-color: #22C55E; }
   .btn-reject  { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.2); color: #EF4444; }
   .btn-reject:hover  { background: #EF4444; color: #fff; border-color: #EF4444; }
-  .btn-view    { background: transparent; border-color: rgba(255,255,255,0.1); color: #888; }
+  .btn-view    { background: transparent; border-color: rgba(255,255,255,0.1); color: var(--text-muted); }
   .btn-view:hover    { border-color: #F07B2B; color: #F07B2B; }
 
   /* CALENDAR */
   .dh-cal { padding: 14px 16px; }
   .dh-cal-hd { display: grid; grid-template-columns: 70px repeat(3,1fr); gap: 5px; margin-bottom: 6px; }
-  .dh-cal-hd-item { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #888; font-weight: 600; text-align: center; padding: 5px 2px; }
+  .dh-cal-hd-item { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; text-align: center; padding: 5px 2px; }
   .dh-cal-row { display: grid; grid-template-columns: 70px repeat(3,1fr); gap: 5px; margin-bottom: 5px; align-items: center; }
-  .dh-cal-time { font-size: 10px; color: #888; font-weight: 500; }
+  .dh-cal-time { font-size: 10px; color: var(--text-muted); font-weight: 500; }
   .dh-cal-slot { border-radius: 5px; padding: 8px 6px; font-size: 10px; font-weight: 600; text-align: center; border: 1px solid; transition: all 0.2s; cursor: pointer; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   .dh-cal-slot:hover { transform: scale(1.03); }
   .cal-booked    { background: rgba(240,123,43,0.12); border-color: rgba(240,123,43,0.25); color: #F07B2B; }
   .cal-available { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.2);  color: #22C55E; }
+  .cal-unavailable { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.07); color: #555; }
   .cal-blocked   { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.07); color: #555; }
   .dh-cal-legend { display: flex; gap: 14px; padding: 12px 0 2px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
-  .dh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #888; }
+  .dh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); }
   .dh-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
 
   /* CHARTS */
@@ -164,30 +240,30 @@ const css = `
   .dh-bar-grp { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
   .dh-bar { width: 100%; border-radius: 3px 3px 0 0; cursor: pointer; transition: filter 0.2s; }
   .dh-bar:hover { filter: brightness(1.3); }
-  .dh-bar-lbl { font-size: 9px; color: #888; font-weight: 500; }
+  .dh-bar-lbl { font-size: 9px; color: var(--text-muted); font-weight: 500; }
 
   /* ROOMS */
-  .dh-room-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .dh-room-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
   .dh-room-row:last-child { border-bottom: none; }
   .dh-room-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .dh-room-info { flex: 1; }
   .dh-room-name { font-size: 12px; font-weight: 600; }
-  .dh-room-cap  { font-size: 10px; color: #888; margin-top: 1px; }
+  .dh-room-cap  { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
   .dh-bar-bg { background: rgba(255,255,255,0.06); border-radius: 20px; height: 4px; width: 90px; overflow: hidden; }
   .dh-bar-fill { height: 100%; border-radius: 20px; }
   .dh-room-pct { font-size: 11px; font-weight: 700; min-width: 32px; text-align: right; }
 
   /* ALERTS */
-  .dh-alert-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); transition: background 0.15s; }
+  .dh-alert-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 20px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
   .dh-alert-item:last-child { border-bottom: none; }
   .dh-alert-item:hover { background: rgba(255,255,255,0.02); }
   .dh-alert-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
   .dh-alert-title { font-size: 12px; font-weight: 600; }
-  .dh-alert-desc  { font-size: 10px; color: #888; margin-top: 2px; line-height: 1.5; }
-  .dh-alert-time  { font-size: 9px; color: #888; margin-left: auto; white-space: nowrap; padding-top: 2px; }
+  .dh-alert-desc  { font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+  .dh-alert-time  { font-size: 9px; color: var(--text-muted); margin-left: auto; white-space: nowrap; padding-top: 2px; }
 
   /* LEADS */
-  .dh-lead-row { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .dh-lead-row { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--border); }
   .dh-lead-row:last-child { border-bottom: none; }
   .dh-lead-av { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0; }
   .dh-lead-name { font-size: 12px; font-weight: 600; flex: 1; }
@@ -195,47 +271,47 @@ const css = `
   .stage-new       { background: rgba(59,130,246,0.12); color: #3B82F6; }
   .stage-follow-up { background: rgba(245,158,11,0.12); color: #F59E0B; }
   .stage-converted { background: rgba(34,197,94,0.12);  color: #22C55E; }
-  .dh-lead-btn { background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #888; font-size: 10px; font-weight: 600; padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .dh-lead-btn { background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-muted); font-size: 10px; font-weight: 600; padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
   .dh-lead-btn:hover { border-color: #F07B2B; color: #F07B2B; }
 
   /* MODAL */
   .dh-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
-  .dh-modal { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; width: 100%; max-width: 520px; overflow: hidden; }
-  .dh-modal-hd { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; justify-content: space-between; align-items: center; }
+  .dh-modal { background: var(--bg-panel); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; width: 100%; max-width: 520px; overflow: hidden; }
+  .dh-modal-hd { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
   .dh-modal-title { font-size: 15px; font-weight: 700; }
-  .dh-modal-close { background: none; border: none; color: #888; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.2s; }
+  .dh-modal-close { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.2s; }
   .dh-modal-close:hover { color: #fff; }
   .dh-modal-body { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
   .dh-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .dh-form-group { display: flex; flex-direction: column; gap: 5px; }
-  .dh-form-group label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #888; font-weight: 600; }
-  .dh-form-group input, .dh-form-group select, .dh-form-group textarea { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #F0EDE8; padding: 10px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; width: 100%; }
+  .dh-form-group label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+  .dh-form-group input, .dh-form-group select, .dh-form-group textarea { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); padding: 10px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; width: 100%; }
   .dh-form-group input:focus, .dh-form-group select:focus, .dh-form-group textarea:focus { border-color: #F07B2B; }
   .dh-form-group textarea { resize: vertical; min-height: 80px; }
-  .dh-form-group select option { background: #1E1E1E; }
+  .dh-form-group select option { background: var(--bg-panel); }
   .dh-modal-ft { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; gap: 10px; justify-content: flex-end; }
-  .dh-btn-cancel { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #888; padding: 9px 18px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .dh-btn-cancel { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 9px 18px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
   .dh-btn-cancel:hover { border-color: #fff; color: #fff; }
 
   /* TOAST */
   .dh-toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
-  .dh-toast { background: #1E1E1E; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 12px 18px; font-size: 12px; font-weight: 600; color: #F0EDE8; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); animation: slideIn 0.3s ease; min-width: 240px; }
+  .dh-toast { background: var(--bg-panel); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 12px 18px; font-size: 12px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); animation: slideIn 0.3s ease; min-width: 240px; }
   @keyframes slideIn { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
   .toast-green { border-left: 3px solid #22C55E; }
   .toast-red   { border-left: 3px solid #EF4444; }
   .toast-orange { border-left: 3px solid #F07B2B; }
 
   /* NOTE INPUT */
-  .dh-note-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #F0EDE8; padding: 8px 10px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none; width: 100%; transition: border-color 0.2s; }
+  .dh-note-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); padding: 8px 10px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none; width: 100%; transition: border-color 0.2s; }
   .dh-note-input:focus { border-color: #F07B2B; }
 
   /* MISC */
   .dh-empty { padding: 40px; text-align: center; color: #555; font-size: 13px; }
-  .dh-filter-bar { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); flex-wrap: wrap; }
-  .dh-filter-btn { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #888; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .dh-filter-bar { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .dh-filter-btn { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: var(--text-muted); font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
   .dh-filter-btn:hover { border-color: #F07B2B; color: #F07B2B; }
   .dh-filter-btn.active-filter { background: rgba(240,123,43,0.15); border-color: rgba(240,123,43,0.3); color: #F07B2B; }
-  .dh-search { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 7px 12px; font-family: 'DM Sans', sans-serif; font-size: 12px; color: #F0EDE8; outline: none; width: 200px; transition: border-color 0.2s; }
+  .dh-search { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 7px 12px; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--text-primary); outline: none; width: 200px; transition: border-color 0.2s; }
   .dh-search:focus { border-color: #F07B2B; }
   .dh-search::placeholder { color: #555; }
 
@@ -284,6 +360,16 @@ function mapDocumentStatus(apiStatus) {
   return "Pending";
 }
 
+function getInitials(name) {
+  return String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .map(part => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function getDocumentPreviewUrl(doc, apiBaseUrl) {
   if (!doc) return null;
   if (doc.documentUrl) return doc.documentUrl;
@@ -309,20 +395,37 @@ function Toast({ toasts }) {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const { user, token, logout } = useAuth();
+   const { theme, toggleTheme } = useTheme();   // ← ADD THIS LINE
   const [isMobile, setIsMobile]       = useState(
     typeof window !== "undefined" ? window.innerWidth < SIDEBAR_BREAKPOINT : false
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen]       = useState(false);
   const [activeNav, setActiveNav]     = useState("overview");
-  const [bookings, setBookings]       = useState(INITIAL_BOOKINGS);
-  const [leads, setLeads]             = useState(INITIAL_LEADS);
+  const [bookings, setBookings]       = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState("");
+  const [allSlots, setAllSlots] = useState([]);
+  const [leads, setLeads]             = useState([]);
   const [filter, setFilter]           = useState("all");
+  const [leadFilter, setLeadFilter]   = useState("all");
   const [search, setSearch]           = useState("");
   const [toasts, setToasts]           = useState([]);
   const [showModal, setShowModal]     = useState(false);
   const [viewBooking, setViewBooking] = useState(null);
-  const [newBooking, setNewBooking]   = useState({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
+  const [newBooking, setNewBooking]   = useState({
+    name: "",
+    userId: "",
+    room: "",
+    roomId: "",
+    date: "",
+    slot: "",
+    slotId: "",
+    amount: "",
+    payment: "pending",
+    numberOfAttendees: 1,
+  });
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [noteInputs, setNoteInputs]   = useState({});
   const [users, setUsers]             = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -359,14 +462,33 @@ export default function AdminDashboard() {
   const clientDocInputRef = useRef(null);
     // ── ROOMS STATE ──
   const [roomsData, setRoomsData] = useState([]);
-  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', description: '' });
+  const [newRoomData, setNewRoomData] = useState({ name: '', capacity: '', cost: '', description: '' });
   const [editingRoomId, setEditingRoomId] = useState(null);
-  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', description: '' });
+  const [editRoomData, setEditRoomData] = useState({ name: '', capacity: '', cost: '', description: '' });
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [roomsSubmitting, setRoomsSubmitting] = useState(false);
   const [roomFormError, setRoomFormError] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
   const [showRoomModal, setShowRoomModal] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [roomSlots, setRoomSlots] = useState([]);
+  const [roomSlotsLoading, setRoomSlotsLoading] = useState(false);
+  const [roomSlotsError, setRoomSlotsError] = useState("");
+  const [slotSubmitting, setSlotSubmitting] = useState(false);
+  const [slotForm, setSlotForm] = useState({ title: "", slotDate: "" });
+   // ── LEAD MODAL STATE ──
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [viewLead, setViewLead] = useState(null);
+  const [newLeadData, setNewLeadData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    stage: 'new',
+    notes: ''
+  });
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState("");
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${SIDEBAR_BREAKPOINT - 1}px)`);
@@ -380,7 +502,102 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (activeNav !== "users" && activeNav !== "clients") return;
+    if (!token) {
+      setBookingsError("Authentication token is missing.");
+      return;
+    }
+
+    let cancelled = false;
+    const fetchBookings = async () => {
+      setBookingsLoading(true);
+      setBookingsError("");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setBookingsError(data.message || "Failed to fetch bookings.");
+          }
+          return;
+        }
+
+        const bookingList = Array.isArray(data.bookings) ? data.bookings : [];
+        const mappedBookings = bookingList.map((item, idx) => mapApiBookingToDashboardBooking(item, idx));
+        if (!cancelled) {
+          setBookings(mappedBookings);
+        }
+      } catch {
+        if (!cancelled) {
+          setBookingsError("Could not reach the bookings API.");
+        }
+      } finally {
+        if (!cancelled) {
+          setBookingsLoading(false);
+        }
+      }
+    };
+
+    fetchBookings();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setAllSlots([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchAllSlots = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/slots`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (!cancelled) setAllSlots([]);
+          return;
+        }
+
+        const slots = Array.isArray(data.slots)
+          ? data.slots
+          : Array.isArray(data.data)
+            ? data.data
+            : Array.isArray(data.items)
+              ? data.items
+              : [];
+        if (!cancelled) {
+          setAllSlots(slots);
+        }
+      } catch {
+        if (!cancelled) {
+          setAllSlots([]);
+        }
+      }
+    };
+
+    fetchAllSlots();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (activeNav !== "users" && activeNav !== "clients" && !showModal) return;
 
     const fetchUsers = async () => {
       if (!token) {
@@ -412,7 +629,80 @@ export default function AdminDashboard() {
     };
 
     fetchUsers();
-  }, [activeNav, token, usersReload]);
+  }, [activeNav, token, usersReload, showModal]);
+
+  useEffect(() => {
+    if (activeNav !== "leads") return;
+    if (!token) {
+      setLeadsError("Authentication token is missing.");
+      return;
+    }
+
+    let cancelled = false;
+    const leadColors = ["#6c63ff", "#F07B2B", "#22C55E", "#3B82F6", "#7C3AED", "#EC4899"];
+
+    const fetchLeads = async () => {
+      setLeadsLoading(true);
+      setLeadsError("");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/contact`, {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setLeads([]);
+            setLeadsError(data.message || "Failed to fetch leads.");
+          }
+          return;
+        }
+
+        const messages = Array.isArray(data.messages) ? data.messages : [];
+        const mappedLeads = messages.map((item, idx) => {
+          const name = item.fullName || "Unknown Lead";
+          const phone =
+            typeof item.phoneNumber === "string"
+              ? item.phoneNumber.trim()
+              : typeof item.phone === "string"
+                ? item.phone.trim()
+                : "";
+          return {
+            id: item.id || `lead-${idx}`,
+            name,
+            initials: getInitials(name),
+            color: leadColors[idx % leadColors.length],
+            stage: "new",
+            phone,
+            email: item.email || "",
+            note: item.message || "",
+            createdAt: item.createdAt || null,
+          };
+        });
+
+        if (!cancelled) {
+          setLeads(mappedLeads);
+        }
+      } catch {
+        if (!cancelled) {
+          setLeads([]);
+          setLeadsError("Could not reach the leads API.");
+        }
+      } finally {
+        if (!cancelled) setLeadsLoading(false);
+      }
+    };
+
+    fetchLeads();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeNav, token]);
 
   useEffect(() => {
     if (activeNav !== "rooms" || roomsData.length > 0) return;
@@ -674,94 +964,193 @@ export default function AdminDashboard() {
   };
 
   const createRoom = async () => {
-    if (!newRoomData.name.trim() || !newRoomData.capacity) {
-      setRoomFormError("Room name and capacity are required.");
-      return;
+  if (!newRoomData.name.trim() || !newRoomData.capacity || newRoomData.cost === "") {
+    setRoomFormError("Room name, capacity, and cost are required.");
+    return;
+  }
+  setRoomFormError("");
+  setRoomsSubmitting(true);
+  try {
+    const response = await fetch("http://localhost:3000/api/rooms", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: newRoomData.name,
+        capacity: parseInt(newRoomData.capacity),
+        cost: parseFloat(newRoomData.cost),
+        description: newRoomData.description
+      })
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room created successfully", "green", "✓");
+      setNewRoomData({ name: '', capacity: '', cost: '', description: '' });
+      setShowRoomModal(false);
+      fetchRooms();
+    } else {
+      setRoomFormError(data.message || "Failed to create room.");
     }
-    setRoomFormError("");
-    setRoomsSubmitting(true);
+  } catch {
+    setRoomFormError("Error creating room.");
+  } finally {
+    setRoomsSubmitting(false);
+  }
+};
+  const updateRoom = async () => {
+  if (!editRoomData.name.trim() || !editRoomData.capacity || editRoomData.cost === "") {
+    setRoomFormError("Room name, capacity, and cost are required.");
+    return;
+  }
+  setRoomFormError("");
+  setRoomsSubmitting(true);
+  try {
+    const response = await fetch(`http://localhost:3000/api/rooms/${editingRoomId}`, {
+      method: "PUT",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: editRoomData.name,
+        capacity: parseInt(editRoomData.capacity),
+        cost: parseFloat(editRoomData.cost),
+        description: editRoomData.description
+      })
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room updated successfully", "green", "✓");
+      setEditingRoomId(null);
+      setEditRoomData({ name: '', capacity: '', cost: '', description: '' });
+      setShowRoomModal(false);
+      fetchRooms();
+    } else {
+      setRoomFormError(data.message || "Failed to update room.");
+    }
+  } catch {
+    setRoomFormError("Error updating room.");
+  } finally {
+    setRoomsSubmitting(false);
+  }
+};
+
+  const fetchRoomSlots = async (roomId) => {
+    if (!roomId) return;
+    setRoomSlotsLoading(true);
+    setRoomSlotsError("");
     try {
-      const response = await fetch("http://localhost:3000/api/rooms/admin/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newRoomData.name,
-          capacity: parseInt(newRoomData.capacity),
-          description: newRoomData.description
-        })
+      const response = await fetch(`${API_BASE_URL}/api/slots?roomId=${encodeURIComponent(roomId)}`, {
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
       });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room created successfully", "green", "✓");
-        setNewRoomData({ name: '', capacity: '', description: '' });
-        setShowRoomModal(false);
-        fetchRooms();
-      } else {
-        setRoomFormError(data.message || "Failed to create room.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRoomSlots([]);
+        setRoomSlotsError(data.message || "Failed to fetch room slots.");
+        return;
       }
+
+      const slots = Array.isArray(data.slots)
+        ? data.slots
+        : Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.items)
+            ? data.items
+            : [];
+      const filteredSlots = slots.filter((slot) => {
+        const slotRoomId = slot.roomId || slot.room?.id;
+        if (!slotRoomId) return true;
+        return String(slotRoomId) === String(roomId);
+      });
+      setRoomSlots(filteredSlots);
     } catch {
-      setRoomFormError("Error creating room.");
+      setRoomSlots([]);
+      setRoomSlotsError("Could not reach the slots API.");
     } finally {
-      setRoomsSubmitting(false);
+      setRoomSlotsLoading(false);
     }
   };
 
-  const updateRoom = async () => {
-    if (!editRoomData.name.trim() || !editRoomData.capacity) {
-      setRoomFormError("Room name and capacity are required.");
+  const openRoomDetails = (room) => {
+    setSelectedRoom(room);
+    setSlotForm({ title: "", slotDate: "" });
+    setRoomSlotsError("");
+    setActiveNav("room-details");
+    fetchRoomSlots(room.id);
+  };
+
+  const createRoomSlot = async () => {
+    if (!selectedRoom?.id) {
+      setRoomSlotsError("No room selected.");
       return;
     }
-    setRoomFormError("");
-    setRoomsSubmitting(true);
+    if (!slotForm.title.trim() || !slotForm.slotDate) {
+      setRoomSlotsError("Slot title and slot date are required.");
+      return;
+    }
+
+    setSlotSubmitting(true);
+    setRoomSlotsError("");
     try {
-      const response = await fetch(`http://localhost:3000/api/rooms/admin/rooms/${editingRoomId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch(`${API_BASE_URL}/api/slots`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          name: editRoomData.name,
-          capacity: parseInt(editRoomData.capacity),
-          description: editRoomData.description
-        })
+          title: slotForm.title.trim(),
+          slotDate: slotForm.slotDate,
+          roomId: selectedRoom.id,
+        }),
       });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room updated successfully", "green", "✓");
-        setEditingRoomId(null);
-        setEditRoomData({ name: '', capacity: '', description: '' });
-        setShowRoomModal(false);
-        fetchRooms();
-      } else {
-        setRoomFormError(data.message || "Failed to update room.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRoomSlotsError(data.message || "Failed to create booking slot.");
+        return;
       }
+
+      addToast(data.message || "Booking slot created.", "green", "✓");
+      setSlotForm({ title: "", slotDate: "" });
+      fetchRoomSlots(selectedRoom.id);
     } catch {
-      setRoomFormError("Error updating room.");
+      setRoomSlotsError("Could not reach the slots API.");
     } finally {
-      setRoomsSubmitting(false);
+      setSlotSubmitting(false);
     }
   };
 
   const deleteRoom = async (id) => {
-    if (!confirm("Are you sure?")) return;
-    try {
-      const response = await fetch(`http://localhost:3000/api/rooms/admin/rooms/${id}`, {
-        method: "DELETE"
-      });
-      const data = await response.json();
-      if (data.success) {
-        addToast("Room deleted", "green", "✓");
-        fetchRooms();
-      } else {
-        addToast(data.message || "Failed to delete room", "red", "✗");
+  if (!confirm("Are you sure?")) return;
+  try {
+    const response = await fetch(`http://localhost:3000/api/rooms/${id}`, {
+      method: "DELETE",
+      headers: { 
+        "Authorization": `Bearer ${token}`
       }
-    } catch {
-      addToast("Error deleting room", "red", "✗");
+    });
+    const data = await response.json();
+    if (data.success) {
+      addToast("Room deleted", "green", "✓");
+      fetchRooms();
+    } else {
+      addToast(data.message || "Failed to delete room", "red", "✗");
     }
-  };
+  } catch {
+    addToast("Error deleting room", "red", "✗");
+  }
+};
 
   const openCreateRoomModal = () => {
     setEditingRoomId(null);
     setRoomFormError("");
-    setNewRoomData({ name: '', capacity: '', description: '' });
+    setNewRoomData({ name: '', capacity: '', cost: '', description: '' });
     setShowRoomModal(true);
   };
 
@@ -771,6 +1160,7 @@ export default function AdminDashboard() {
     setEditRoomData({
       name: room.name,
       capacity: room.capacity,
+      cost: room.cost ?? room.price ?? room.pricePerDay ?? room.pricePerHour ?? room.amount ?? '',
       description: room.description || ''
     });
     setShowRoomModal(true);
@@ -799,20 +1189,102 @@ export default function AdminDashboard() {
   };
 
   // ── ADD BOOKING ──
-  const submitNewBooking = () => {
-    if (!newBooking.name || !newBooking.date || !newBooking.amount) {
-      addToast("Please fill all required fields", "red", "!");
+  const resetBookingDraft = () => ({
+    name: "",
+    userId: "",
+    room: "",
+    roomId: "",
+    roomCapacity: "",
+    date: "",
+    slot: "",
+    slotId: "",
+    amount: "",
+    payment: "pending",
+    numberOfAttendees: 1,
+  });
+
+  const closeBookingModal = () => {
+    setShowModal(false);
+    setNewBooking(resetBookingDraft());
+  };
+
+  const openBookingFromSlot = (slotContext) => {
+    setNewBooking((p) => ({
+      ...p,
+      room: slotContext.roomName || "",
+      roomId: slotContext.roomId || "",
+      roomCapacity: slotContext.roomCapacity || "",
+      slot: slotContext.slotTitle || "",
+      slotId: slotContext.slotId || "",
+      date: slotContext.isoDate || "",
+      amount: slotContext.cost || "",
+    }));
+    setShowModal(true);
+  };
+
+  const submitNewBooking = async () => {
+    if (!newBooking.userId || !newBooking.roomId || !newBooking.slotId || !newBooking.date || !newBooking.amount || !newBooking.numberOfAttendees) {
+      addToast("Client, slot, date, amount and attendees are required.", "red", "!");
       return;
     }
-    const colors = ["#6c63ff","#059669","#F07B2B","#3B82F6","#7C3AED","#EC4899"];
-    const id = "BK" + String(bookings.length + 1).padStart(3, "0");
-    const initials = newBooking.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
-    const color = colors[bookings.length % colors.length];
-    const roomIcon = newBooking.room === "Private Office" ? "🏛️" : newBooking.room === "Boardroom" ? "📋" : "⚖️";
-    setBookings(p => [{ id, initials, color, roomIcon, status: "pending", doc: false, ...newBooking, amount: Number(newBooking.amount) }, ...p]);
-    setShowModal(false);
-    setNewBooking({ name:"", type:"ADR Practitioner", room:"Private Office", date:"", slot:"10am–1pm", amount:"", payment:"pending" });
-    addToast(`Booking created for ${newBooking.name}`, "green", "📅");
+    const attendeeCount = Number(newBooking.numberOfAttendees);
+    const roomCapacity = Number(newBooking.roomCapacity);
+    if (Number.isFinite(roomCapacity) && roomCapacity > 0 && attendeeCount > roomCapacity) {
+      addToast(`Attendees cannot exceed room capacity (${roomCapacity}).`, "red", "!");
+      return;
+    }
+
+    if (!token) {
+      addToast("Authentication token is missing.", "red", "!");
+      return;
+    }
+
+    setBookingSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bookings/admin-user`, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId: newBooking.roomId,
+          slotId: newBooking.slotId,
+          userId: newBooking.userId,
+          bookingDate: newBooking.date,
+          totalCost: Number(newBooking.amount),
+          numberOfAttendees: attendeeCount,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        addToast(data.message || "Failed to create booking.", "red", "✗");
+        return;
+      }
+
+      addToast(data.message || "Booking created successfully.", "green", "✓");
+      closeBookingModal();
+      setBookingsLoading(true);
+      const refresh = await fetch(`${API_BASE_URL}/api/bookings`, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const refreshData = await refresh.json().catch(() => ({}));
+      if (refresh.ok) {
+        const bookingList = Array.isArray(refreshData.bookings) ? refreshData.bookings : [];
+        setBookings(bookingList.map((item, idx) => mapApiBookingToDashboardBooking(item, idx)));
+      }
+    } catch {
+      addToast("Could not reach the bookings API.", "red", "✗");
+    } finally {
+      setBookingsLoading(false);
+      setBookingSubmitting(false);
+    }
   };
 
   // ── LEADS ──
@@ -835,38 +1307,109 @@ export default function AdminDashboard() {
     const matchSearch = b.name.toLowerCase().includes(search.toLowerCase()) || b.room.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
+  const filteredLeads = leads.filter(l => leadFilter === "all" || l.stage === leadFilter);
+  const selectedClientBookings = selectedClient?.id
+    ? bookings.filter((booking) => String(booking.userId || "") === String(selectedClient.id))
+    : [];
+  const memberUserOptions = users.filter((u) => String(u.role || "").toUpperCase() === "MEMBER");
 
   // ── STATS ──
   const totalRevenue = bookings.filter(b => b.payment === "paid").reduce((s, b) => s + b.amount, 0);
   const pendingCount = bookings.filter(b => b.status === "pending").length;
   const confirmedCount = bookings.filter(b => b.status === "confirmed").length;
+  const revenueByDay = Object.entries(
+    bookings.reduce((acc, booking) => {
+      if (!booking?.date) return acc;
+      const dayLabel = formatCalendarDayLabel(booking.date).split(" ")[0];
+      acc[dayLabel] = (acc[dayLabel] || 0) + Number(booking.amount || 0);
+      return acc;
+    }, {})
+  );
+  const topRoom = Object.entries(
+    bookings.reduce((acc, booking) => {
+      if (!booking?.room) return acc;
+      acc[booking.room] = (acc[booking.room] || 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1])[0];
 
   // ── CALENDAR DATA ──
+  const slotCalendarDates = allSlots
+    .map((slot) => {
+      if (!slot?.slotDate) return "";
+      const parsed = new Date(slot.slotDate);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+    })
+    .filter(Boolean);
+  const bookingCalendarDates = bookings.map((b) => b.date).filter(Boolean);
+  const calendarIsoDates = Array.from(new Set([...slotCalendarDates, ...bookingCalendarDates])).sort();
+  const calendarDays = calendarIsoDates.map((isoDate) => ({
+    isoDate,
+    label: formatCalendarDayLabel(isoDate),
+  }));
+  const slotTitlesFromApi = allSlots
+    .map((slot) => (typeof slot?.title === "string" ? slot.title.trim() : ""))
+    .filter(Boolean);
+  const bookingSlotTitles = bookings
+    .map((b) => (typeof b.slot === "string" ? b.slot.trim() : ""))
+    .filter((slot) => slot && slot !== "N/A");
+  const calendarSlots = Array.from(new Set([...slotTitlesFromApi, ...bookingSlotTitles]));
+  const slotRooms = allSlots
+    .map((slot) => slot?.room?.name || "")
+    .filter(Boolean);
+  const bookingRooms = bookings.map((b) => b.room).filter(Boolean);
+  const calendarRooms = Array.from(new Set([...slotRooms, ...bookingRooms]));
+
   const calendarData = {};
-  bookings.forEach(b => {
-    SLOTS.forEach(slot => {
-      ROOMS.forEach(room => {
-        const key = `${b.date}-${slot}-${room}`;
-        if (b.slot === slot && b.room === room && (b.status === "confirmed" || b.status === "pending")) {
-          calendarData[key] = { name: b.name.split(" ")[1] || b.name.split(" ")[0], status: b.status };
-        }
-      });
-    });
+  allSlots.forEach((slot) => {
+    const title = typeof slot?.title === "string" ? slot.title.trim() : "";
+    const roomName = slot?.room?.name || "";
+    if (!title || !roomName || !slot?.slotDate) return;
+    const parsed = new Date(slot.slotDate);
+    if (Number.isNaN(parsed.getTime())) return;
+    const isoDate = parsed.toISOString().slice(0, 10);
+    const key = `${isoDate}-${title}-${roomName}`;
+    const rawCost = slot?.cost ?? slot?.room?.cost ?? slot?.room?.price ?? slot?.room?.amount;
+    const normalizedCost = Number(rawCost);
+    const normalizedCapacity = Number(slot?.room?.capacity);
+    calendarData[key] = {
+      type: slot.booked ? "booked" : "available",
+      bookingId: null,
+      name: "Reserved",
+      status: slot.booked ? "confirmed" : "available",
+      slotId: slot?.id || "",
+      roomId: slot?.roomId || slot?.room?.id || "",
+      roomName,
+      slotTitle: title,
+      isoDate,
+      cost: Number.isFinite(normalizedCost) ? normalizedCost : "",
+      roomCapacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : "",
+    };
   });
 
-  const getCalSlot = (day, slot, room) => {
-    const dateMap = { "Mon 30 Mar":"2026-03-30","Tue 31 Mar":"2026-03-31","Wed 1 Apr":"2026-04-01","Thu 2 Apr":"2026-04-02","Fri 3 Apr":"2026-04-03" };
-    const key = `${dateMap[day]}-${slot}-${room}`;
-    if (calendarData[key]) return { type: "booked", ...calendarData[key] };
-    if (slot === "5pm–8pm" && room === "Combined") return { type: "blocked" };
-    return { type: "available" };
+  bookings.forEach((b) => {
+    if (!b.date || !b.slot || b.slot === "N/A") return;
+    if (b.status !== "confirmed" && b.status !== "pending") return;
+    const key = `${b.date}-${b.slot}-${b.room}`;
+    calendarData[key] = {
+      type: "booked",
+      name: b.name.split(" ")[1] || b.name.split(" ")[0],
+      status: b.status,
+      bookingId: b.id,
+    };
+  });
+
+  const getCalSlot = (isoDate, slot, room) => {
+    const key = `${isoDate}-${slot}-${room}`;
+    if (calendarData[key]) return calendarData[key];
+    return { type: "unavailable" };
   };
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <>
       <style>{css}</style>
-      <div className="dh-wrap">
+     <div className="dh-wrap" data-theme={theme}>
         <div
           className={`dh-sidebar-backdrop ${isMobile && mobileMenuOpen ? "dh-sidebar-backdrop--visible" : ""}`}
           aria-hidden="true"
@@ -947,18 +1490,51 @@ export default function AdminDashboard() {
                 {activeNav === "leads"         && "Lead Pipeline"}
                 {activeNav === "notifications" && "Notifications"}
                 {activeNav === "analytics"     && "Analytics"}
+                {activeNav === "room-details"  && "Room Details"}
               </h1>
               <p>DR Hub Admin · Wednesday, 1 April 2026</p>
               </div>
             </div>
             <div className="dh-topbar-right">
-              <div className="dh-chip">📅 Wed 1 Apr 2026</div>
-              <div className="dh-notif" onClick={() => addToast(`${pendingCount} bookings need your approval`, "orange", "🔔")}>
-                🔔<span className="dh-notif-dot"></span>
-              </div>
-              <button className="dh-btn-primary" onClick={logout}>Logout</button>
-              <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
-            </div>
+  <div className="dh-chip">📅 Wed 1 Apr 2026</div>
+  <div className="dh-notif" onClick={() => addToast(`${pendingCount} bookings need your approval`, "orange", "🔔")}>
+    🔔<span className="dh-notif-dot"></span>
+  </div>
+  <button 
+    onClick={toggleTheme}
+    style={{
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      border: "1px solid var(--border-input)",
+      background: "var(--bg-input)",
+      color: "var(--text-primary)",
+      cursor: "pointer",
+      fontSize: 16,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    {theme === "dark" ? "☀️" : "🌙"}
+  </button>
+  <button className="dh-btn-primary" style={{background:'#22C55E'}} onClick={() => {
+  const headers = ['ID','Client','Room','Date','Slot','Amount','Payment','Status'];
+  const rows = bookings.map(b => [b.id, b.name, b.room, b.date, b.slot, b.amount, b.payment, b.status]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `drhub-bookings-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  addToast('Bookings exported to Excel!', 'green', '📊');
+}}>
+  📊 Export
+</button>
+  <button className="dh-btn-primary" onClick={logout}>Logout</button>
+</div>
           </header>
 
           {/* CONTENT */}
@@ -1053,34 +1629,52 @@ export default function AdminDashboard() {
                       <button className="dh-panel-link" onClick={() => pickNav("calendar")}>Full view →</button>
                     </div>
                     <div className="dh-cal">
-                      <div className="dh-cal-hd">
-                        <div className="dh-cal-hd-item"></div>
-                        {ROOMS.map(r => <div key={r} className="dh-cal-hd-item">{r.split(" ")[0]}</div>)}
-                      </div>
-                      {["Wed 1 Apr","Thu 2 Apr"].map(day =>
-                        SLOTS.map(slot => {
-                          const daySlot = `${day} ${slot}`;
-                          return (
-                            <div key={daySlot} className="dh-cal-row">
-                              <div className="dh-cal-time">{day.split(" ")[0]}<br/>{slot}</div>
-                              {ROOMS.map(room => {
-                                const s = getCalSlot(day, slot, room);
-                                return (
-                                  <div key={room} className={`dh-cal-slot cal-${s.type}`} onClick={() => s.type === "booked" && addToast(`${s.name} — ${room} ${slot}`, "orange", "📋")}>
-                                    <div style={{fontSize:10,fontWeight:700}}>{s.type === "booked" ? s.name : s.type === "available" ? "Free" : "Blocked"}</div>
-                                    {s.type === "booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })
+                      {calendarDays.length === 0 || calendarSlots.length === 0 || calendarRooms.length === 0 ? (
+                        <div className="dh-empty" style={{ margin: "12px 0" }}>No calendar slot data available from backend</div>
+                      ) : (
+                        <>
+                          <div className="dh-cal-hd" style={{ gridTemplateColumns: `70px repeat(${calendarRooms.length}, 1fr)` }}>
+                            <div className="dh-cal-hd-item"></div>
+                            {calendarRooms.map(r => <div key={r} className="dh-cal-hd-item">{r.split(" ")[0]}</div>)}
+                          </div>
+                          {calendarDays.slice(0, 2).map(day =>
+                            calendarSlots.map(slot => {
+                              const daySlot = `${day.isoDate} ${slot}`;
+                              return (
+                                <div key={daySlot} className="dh-cal-row" style={{ gridTemplateColumns: `70px repeat(${calendarRooms.length}, 1fr)` }}>
+                                  <div className="dh-cal-time">{day.label.split(" ")[0]}<br/>{slot}</div>
+                                  {calendarRooms.map(room => {
+                                    const s = getCalSlot(day.isoDate, slot, room);
+                                    return (
+                                      <div
+                                        key={room}
+                                        className={`dh-cal-slot cal-${s.type}`}
+                                        onClick={() => {
+                                          if (s.type === "booked") {
+                                            addToast(`${s.name} — ${room} ${slot}`, "orange", "📋");
+                                            return;
+                                          }
+                                          if (s.type === "available") {
+                                            openBookingFromSlot(s);
+                                          }
+                                        }}
+                                      >
+                                        <div style={{fontSize:10,fontWeight:700}}>{s.type === "booked" ? s.name : s.type === "available" ? "Free" : "—"}</div>
+                                        {s.type === "booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })
+                          )}
+                          <div className="dh-cal-legend">
+                            {[["cal-booked","Booked"],["cal-available","Available"]].map(([cls,lbl]) => (
+                              <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
+                            ))}
+                          </div>
+                        </>
                       )}
-                      <div className="dh-cal-legend">
-                        {[["cal-booked","Booked"],["cal-available","Available"],["cal-blocked","Blocked"]].map(([cls,lbl]) => (
-                          <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1169,16 +1763,6 @@ export default function AdminDashboard() {
                         <div className="dh-alert-time">Today</div>
                       </div>
                     ))}
-                    {bookings.filter(b=>!b.doc).map(b => (
-                      <div key={b.id} className="dh-alert-item">
-                        <div className="dh-alert-icon" style={{background:"rgba(239,68,68,0.12)"}}>📄</div>
-                        <div>
-                          <div className="dh-alert-title">Missing Document</div>
-                          <div className="dh-alert-desc">{b.name} — qualification proof not uploaded</div>
-                        </div>
-                        <div className="dh-alert-time">Today</div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </>
@@ -1190,9 +1774,13 @@ export default function AdminDashboard() {
                 <div className="dh-panel-hd">
                   <div>
                     <div className="dh-panel-title">All Bookings</div>
-                    <div className="dh-panel-sub">{filteredBookings.length} of {bookings.length} shown</div>
+                    <div className="dh-panel-sub">
+                      {bookingsLoading ? "Loading bookings..." : `${filteredBookings.length} of ${bookings.length} shown`}
+                    </div>
+                    {!bookingsLoading && bookingsError && (
+                      <div className="dh-panel-sub" style={{ color: "#fca5a5" }}>{bookingsError}</div>
+                    )}
                   </div>
-                  <button className="dh-btn-primary" onClick={() => setShowModal(true)}>+ New Booking</button>
                 </div>
                 <div className="dh-filter-bar">
                   {["all","pending","confirmed","rejected","completed"].map(f => (
@@ -1206,11 +1794,11 @@ export default function AdminDashboard() {
                 <div className="dh-table-wrap">
                   <table className="dh-table">
                     <thead><tr>
-                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Payment</th><th>Doc</th><th>Status</th><th>Actions</th>
+                      <th>ID</th><th>Client</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Payment</th><th>Status</th><th>Actions</th>
                     </tr></thead>
                     <tbody>
                       {filteredBookings.length === 0 && (
-                        <tr><td colSpan={10}><div className="dh-empty">No bookings match this filter</div></td></tr>
+                        <tr><td colSpan={9}><div className="dh-empty">No bookings match this filter</div></td></tr>
                       )}
                       {filteredBookings.map(b => (
                         <tr key={b.id} onClick={() => setViewBooking(b)}>
@@ -1221,7 +1809,6 @@ export default function AdminDashboard() {
                           <td><span className="dh-slot-badge">{b.slot}</span></td>
                           <td><span className="dh-amount">{b.amount.toLocaleString()}</span></td>
                           <td><span className={`dh-status ${b.payment==="paid"?"s-confirmed":"s-pending"}`}>{b.payment}</span></td>
-                          <td style={{textAlign:"center"}}>{b.doc ? "✅" : "❌"}</td>
                           <td><StatusBadge status={b.status}/></td>
                           <td onClick={e => e.stopPropagation()}>
                             <div className="dh-actions">
@@ -1252,40 +1839,50 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div style={{padding:"16px 20px",overflowX:"auto"}}>
-                  <div style={{display:"grid",gridTemplateColumns:`80px repeat(${ROOMS.length},1fr)`,gap:6,minWidth:600,marginBottom:8}}>
-                    <div></div>
-                    {ROOMS.map(r => <div key={r} style={{fontSize:11,fontWeight:700,color:"#F07B2B",textAlign:"center",padding:8,background:"rgba(240,123,43,0.08)",borderRadius:6}}>{r}</div>)}
-                  </div>
-                  {DAYS.map(day => (
-                    <div key={day}>
-                      <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#888",fontWeight:600,padding:"12px 0 6px"}}>{day}</div>
-                      {SLOTS.map(slot => (
-                        <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${ROOMS.length},1fr)`,gap:6,minWidth:600,marginBottom:6}}>
-                          <div style={{fontSize:10,color:"#888",fontWeight:500,display:"flex",alignItems:"center"}}>{slot}</div>
-                          {ROOMS.map(room => {
-                            const s = getCalSlot(day, slot, room);
-                            return (
-                              <div key={room} className={`dh-cal-slot cal-${s.type}`}
-                                onClick={() => {
-                                  if (s.type === "booked") {
-                                    const b = bookings.find(bk => bk.name.includes(s.name) && bk.slot === slot && bk.room === room);
-                                    if (b) setViewBooking(b);
-                                  }
-                                }}>
-                                <div style={{fontSize:11,fontWeight:700}}>{s.type==="booked" ? s.name : s.type==="available" ? "Available" : "Blocked"}</div>
-                                {s.type==="booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
-                              </div>
-                            );
-                          })}
+                  {calendarDays.length === 0 || calendarSlots.length === 0 || calendarRooms.length === 0 ? (
+                    <div className="dh-empty">No calendar slot data available from backend</div>
+                  ) : (
+                    <>
+                      <div style={{display:"grid",gridTemplateColumns:`80px repeat(${calendarRooms.length},1fr)`,gap:6,minWidth:600,marginBottom:8}}>
+                        <div></div>
+                        {calendarRooms.map(r => <div key={r} style={{fontSize:11,fontWeight:700,color:"#F07B2B",textAlign:"center",padding:8,background:"rgba(240,123,43,0.08)",borderRadius:6}}>{r}</div>)}
+                      </div>
+                      {calendarDays.map(day => (
+                        <div key={day.isoDate}>
+                          <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",color:"#888",fontWeight:600,padding:"12px 0 6px"}}>{day.label}</div>
+                          {calendarSlots.map(slot => (
+                            <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${calendarRooms.length},1fr)`,gap:6,minWidth:600,marginBottom:6}}>
+                              <div style={{fontSize:10,color:"#888",fontWeight:500,display:"flex",alignItems:"center"}}>{slot}</div>
+                              {calendarRooms.map(room => {
+                                const s = getCalSlot(day.isoDate, slot, room);
+                                return (
+                                  <div key={room} className={`dh-cal-slot cal-${s.type}`}
+                                    onClick={() => {
+                                      if (s.type === "booked") {
+                                        const b = bookings.find((bk) => bk.id === s.bookingId);
+                                        if (b) setViewBooking(b);
+                                        return;
+                                      }
+                                      if (s.type === "available") {
+                                        openBookingFromSlot(s);
+                                      }
+                                    }}>
+                                    <div style={{fontSize:11,fontWeight:700}}>{s.type==="booked" ? s.name : s.type==="available" ? "Available" : "—"}</div>
+                                    {s.type==="booked" && <div style={{fontSize:9,opacity:0.7}}>{s.status}</div>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
                       ))}
-                    </div>
-                  ))}
-                  <div className="dh-cal-legend" style={{marginTop:16}}>
-                    {[["cal-booked","Booked"],["cal-available","Available"],["cal-blocked","Blocked"]].map(([cls,lbl]) => (
-                      <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
-                    ))}
-                  </div>
+                      <div className="dh-cal-legend" style={{marginTop:16}}>
+                        {[["cal-booked","Booked"],["cal-available","Available"]].map(([cls,lbl]) => (
+                          <div key={lbl} className="dh-legend-item"><div className={`dh-legend-dot ${cls}`} style={{border:"1px solid currentColor"}}></div>{lbl}</div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1468,13 +2065,16 @@ export default function AdminDashboard() {
                         <tr><th>ID</th><th>Room</th><th>Date</th><th>Slot</th><th>Amount</th><th>Status</th></tr>
                       </thead>
                       <tbody>
-                        {DUMMY_CLIENT_BOOKINGS.map((booking) => (
+                        {selectedClientBookings.length === 0 && (
+                          <tr><td colSpan={6}><div className="dh-empty">No bookings found for this client</div></td></tr>
+                        )}
+                        {selectedClientBookings.map((booking) => (
                           <tr key={booking.id}>
                             <td style={{ color: "#888", fontSize: 11 }}>{booking.id}</td>
                             <td>{booking.room}</td>
-                            <td style={{ color: "#888", fontSize: 11 }}>{booking.date}</td>
-                            <td>{booking.slot}</td>
-                            <td><span className="dh-amount">{booking.amount.toLocaleString()}</span></td>
+                            <td style={{ color: "#888", fontSize: 11 }}>{booking.date || "-"}</td>
+                            <td>{booking.slot || "-"}</td>
+                            <td><span className="dh-amount">{Number(booking.amount || 0).toLocaleString()}</span></td>
                             <td><StatusBadge status={booking.status} /></td>
                           </tr>
                         ))}
@@ -1590,6 +2190,7 @@ export default function AdminDashboard() {
           <tr>
             <th>Room</th>
             <th>Capacity</th>
+            <th>Cost</th>
             <th>Description</th>
             <th>Status</th>
             <th>Actions</th>
@@ -1598,7 +2199,7 @@ export default function AdminDashboard() {
         <tbody>
           {roomsLoading && (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <div className="dh-empty">Loading rooms...</div>
               </td>
             </tr>
@@ -1613,7 +2214,7 @@ export default function AdminDashboard() {
               );
             }).length === 0 && (
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <div className="dh-empty">No rooms found. Try another search or add a new room.</div>
               </td>
             </tr>
@@ -1631,14 +2232,25 @@ export default function AdminDashboard() {
               <tr key={room.id}>
                 <td style={{ fontWeight: 600 }}>{room.name || "-"}</td>
                 <td>{room.capacity || "-"}</td>
+                <td>
+                  {(() => {
+                    const rawCost = room.cost ?? room.price ?? room.pricePerDay ?? room.pricePerHour ?? room.amount;
+                    const numericCost = Number(rawCost);
+                    if (Number.isFinite(numericCost) && String(rawCost).trim() !== "") {
+                      return `Ksh ${numericCost.toLocaleString()}`;
+                    }
+                    return rawCost ? String(rawCost) : "-";
+                  })()}
+                </td>
                 <td>{room.description || "No description"}</td>
                 <td>
-                  <span className={`dh-status ${room.is_active ? 's-confirmed' : 's-rejected'}`}>
-                    {room.is_active ? 'Active' : 'Inactive'}
+                  <span className={`dh-status ${room.isActive ? 's-confirmed' : 's-rejected'}`}>
+                    {room.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
                 <td>
                   <div style={{ display: "flex", gap: 8 }}>
+                    <button className="dh-action-btn btn-view" onClick={() => openRoomDetails(room)}>Details</button>
                     <button className="dh-action-btn btn-view" onClick={() => startEditRoom(room)}>Edit</button>
                     <button className="dh-action-btn btn-reject" onClick={() => deleteRoom(room.id)}>Delete</button>
                   </div>
@@ -1651,57 +2263,256 @@ export default function AdminDashboard() {
   </div>
 )}
 
-            {/* ── LEADS ── */}
+{activeNav === "room-details" && selectedRoom && (
+  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div>
+          <div className="dh-panel-title">{selectedRoom.name || "Room"}</div>
+          <div className="dh-panel-sub">Room information and booking slots</div>
+        </div>
+        <button className="dh-btn-primary" onClick={() => setActiveNav("rooms")}>← Back to Rooms</button>
+      </div>
+      <div className="dh-table-wrap">
+        <table className="dh-table">
+          <thead>
+            <tr>
+              <th>Room</th>
+              <th>Capacity</th>
+              <th>Cost</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ fontWeight: 600 }}>{selectedRoom.name || "-"}</td>
+              <td>{selectedRoom.capacity || "-"}</td>
+              <td>
+                {(() => {
+                  const rawCost = selectedRoom.cost ?? selectedRoom.price ?? selectedRoom.pricePerDay ?? selectedRoom.pricePerHour ?? selectedRoom.amount;
+                  const numericCost = Number(rawCost);
+                  if (Number.isFinite(numericCost) && String(rawCost).trim() !== "") return `Ksh ${numericCost.toLocaleString()}`;
+                  return rawCost ? String(rawCost) : "-";
+                })()}
+              </td>
+              <td>
+                <span className={`dh-status ${selectedRoom.isActive ? 's-confirmed' : 's-rejected'}`}>
+                  {selectedRoom.isActive ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td>{selectedRoom.description || "No description"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div>
+          <div className="dh-panel-title">Create Booking Slot</div>
+          <div className="dh-panel-sub">Add a named slot for a selected date</div>
+        </div>
+      </div>
+      <div className="dh-modal-body">
+        <div className="dh-form-row">
+          <div className="dh-form-group">
+            <label>Slot Title *</label>
+            <input
+              type="text"
+              placeholder="e.g. 9am - 11am"
+              value={slotForm.title}
+              onChange={(e) => setSlotForm((p) => ({ ...p, title: e.target.value }))}
+            />
+          </div>
+          <div className="dh-form-group">
+            <label>Slot Date *</label>
+            <input
+              type="date"
+              value={slotForm.slotDate}
+              onChange={(e) => setSlotForm((p) => ({ ...p, slotDate: e.target.value }))}
+            />
+          </div>
+        </div>
+        {roomSlotsError && <div style={{ color: "#ffb4b4", fontSize: 12 }}>{roomSlotsError}</div>}
+      </div>
+      <div className="dh-modal-ft">
+        <button className="dh-btn-primary" onClick={createRoomSlot} disabled={slotSubmitting}>
+          {slotSubmitting ? "Saving..." : "Create Slot"}
+        </button>
+      </div>
+    </div>
+
+    <div className="dh-panel">
+      <div className="dh-panel-hd">
+        <div className="dh-panel-title">Room Booking Slots</div>
+        <button className="dh-btn-primary" onClick={() => fetchRoomSlots(selectedRoom.id)}>Refresh Slots</button>
+      </div>
+      <div className="dh-table-wrap">
+        <table className="dh-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Slot Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roomSlotsLoading && (
+              <tr>
+                <td colSpan={3}><div className="dh-empty">Loading slots...</div></td>
+              </tr>
+            )}
+            {!roomSlotsLoading && roomSlots.length === 0 && (
+              <tr>
+                <td colSpan={3}><div className="dh-empty">No slots created for this room yet.</div></td>
+              </tr>
+            )}
+            {!roomSlotsLoading && roomSlots.map((slot) => (
+              <tr key={slot.id || `${slot.title || "slot"}-${slot.slotDate || ""}`}>
+                <td>{slot.title || "-"}</td>
+                <td>{slot.slotDate ? new Date(slot.slotDate).toLocaleDateString() : "-"}</td>
+                <td>{slot.booked ? "Booked" : "Available"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+)}
+
+                        {/* ── LEADS ── */}
             {activeNav === "leads" && (
               <div className="dh-panel">
                 <div className="dh-panel-hd">
                   <div>
                     <div className="dh-panel-title">Lead Pipeline</div>
-                    <div className="dh-panel-sub">Track inquiries from new to converted</div>
+                    <div className="dh-panel-sub">Track and manage potential clients</div>
                   </div>
-                  <button className="dh-btn-primary" onClick={() => {
-                    const name = prompt("New lead name:");
-                    if (!name) return;
-                    const phone = prompt("Phone number:");
-                    setLeads(p => [...p, { id: Date.now(), name, initials: name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(), color:"#6c63ff", stage:"new", phone: phone||"", note:"" }]);
-                    addToast(`${name} added to pipeline`, "green", "🎯");
-                  }}>+ Add Lead</button>
+                 <button className="dh-btn-primary" onClick={() => setShowLeadModal(true)}>+ Add Lead</button>
                 </div>
-                {/* Pipeline columns */}
-                <div className="dh-leads-grid">
-                  {["new","follow-up","converted"].map(stage => (
-                    <div key={stage} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:14,border:"1px solid rgba(255,255,255,0.07)"}}>
-                      <div style={{fontSize:10,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:12,
-                        color:stage==="new"?"#3B82F6":stage==="follow-up"?"#F59E0B":"#22C55E"}}>
-                        {stage} ({leads.filter(l=>l.stage===stage).length})
-                      </div>
-                      {leads.filter(l => l.stage === stage).map(l => (
-                        <div key={l.id} style={{background:"#1E1E1E",borderRadius:8,padding:14,marginBottom:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                            <Avatar initials={l.initials} color={l.color} size={30}/>
-                            <div>
-                              <div style={{fontSize:12,fontWeight:600}}>{l.name}</div>
-                              <div style={{fontSize:10,color:"#888"}}>{l.phone}</div>
-                            </div>
-                          </div>
-                          {l.note && <div style={{fontSize:11,color:"#888",marginBottom:10,fontStyle:"italic",lineHeight:1.5}}>"{l.note}"</div>}
-                          <div style={{marginBottom:8}}>
-                            <input className="dh-note-input" placeholder="Add a note..." defaultValue={l.note}
-                              onChange={e => setNoteInputs(p => ({...p,[l.id]:e.target.value}))}/>
-                          </div>
-                          <div style={{display:"flex",gap:6}}>
-                            <button className="dh-lead-btn" onClick={() => saveNote(l.id)}>💬 Save</button>
-                            {stage !== "converted" && (
-                              <button className="dh-lead-btn" style={{color:"#22C55E",borderColor:"rgba(34,197,94,0.2)"}}
-                                onClick={() => advanceLead(l.id)}>
-                                → {stage==="new"?"Follow Up":"Convert"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+
+                {/* Filter Tabs */}
+                <div className="dh-filter-bar">
+                  {["all", "new", "follow-up", "converted"].map(stage => (
+                    <button 
+                      key={stage} 
+                      className={`dh-filter-btn ${leadFilter === stage ? "active-filter" : ""}`} 
+                      onClick={() => setLeadFilter(stage)}
+                    >
+                      {stage === "all" ? "All" : stage.charAt(0).toUpperCase() + stage.slice(1)}
+                      <span style={{ marginLeft: 5, opacity: 0.7 }}>
+                        ({stage === "all" ? leads.length : leads.filter(l => l.stage === stage).length})
+                      </span>
+                    </button>
                   ))}
+                </div>
+
+                {/* Leads Table */}
+                <div className="dh-table-wrap">
+                  <table className="dh-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Stage</th>
+                        <th>Notes</th>
+                        <th>Added</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadsLoading && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">Loading leads...</div>
+                          </td>
+                        </tr>
+                      )}
+                      {!leadsLoading && leadsError && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">{leadsError}</div>
+                          </td>
+                        </tr>
+                      )}
+                      {!leadsLoading && !leadsError && filteredLeads.map((lead) => (
+                          <tr key={lead.id}>
+                            <td>
+                              <div className="dh-client-cell">
+                                <Avatar initials={lead.initials} color={lead.color} size={34} />
+                                <div>
+                                  <div className="dh-cname">{lead.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div>{lead.phone || "—"}</div>
+                              <div style={{ fontSize: 11, color: "#888" }}>{lead.email || "—"}</div>
+                            </td>
+                            <td>
+                              <span className={`dh-lead-stage stage-${lead.stage === "follow-up" ? "follow-up" : lead.stage}`}>
+                                {lead.stage === "follow-up" ? "Follow Up" : lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1)}
+                              </span>
+                            </td>
+                            <td>
+                              <input
+                                className="dh-note-input"
+                                placeholder="Add note..."
+                                defaultValue={lead.note}
+                                style={{ width: 180 }}
+                                onChange={(e) => setNoteInputs(p => ({ ...p, [lead.id]: e.target.value }))}
+                                onBlur={() => saveNote(lead.id)}
+                              />
+                            </td>
+                            <td style={{ color: "#888", fontSize: 11 }}>
+                              {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : "Just now"}
+                            </td>
+                            <td>
+                              <div className="dh-actions">
+                                {lead.stage !== "converted" && (
+                                  <button
+                                    className="dh-action-btn btn-approve"
+                                    onClick={() => advanceLead(lead.id)}
+                                    title="Move to next stage"
+                                  >
+                                    → {lead.stage === "new" ? "Follow Up" : "Convert"}
+                                  </button>
+                                )}
+                                <button
+                                  className="dh-action-btn btn-view"
+                                  onClick={() => setViewLead(lead)}
+                                  title="View lead details"
+                                >
+                                  👁 View
+                                </button>
+                                <button
+                                  className="dh-action-btn btn-reject"
+                                  onClick={() => {
+                                    if (confirm(`Remove ${lead.name} from leads?`)) {
+                                      setLeads(p => p.filter(l => l.id !== lead.id));
+                                      addToast("Lead removed", "orange", "🗑");
+                                    }
+                                  }}
+                                  title="Remove lead"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {!leadsLoading && !leadsError && filteredLeads.length === 0 && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="dh-empty">No leads found. Click "+ Add Lead" to get started.</div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -1732,16 +2543,6 @@ export default function AdminDashboard() {
                     <div>
                       <div className="dh-alert-title">Payment Pending — {b.name}</div>
                       <div className="dh-alert-desc">Ksh {b.amount.toLocaleString()} outstanding for {b.room} on {b.date}</div>
-                    </div>
-                    <div className="dh-alert-time">Today</div>
-                  </div>
-                ))}
-                {bookings.filter(b=>!b.doc).map(b => (
-                  <div key={`doc-${b.id}`} className="dh-alert-item">
-                    <div className="dh-alert-icon" style={{background:"rgba(239,68,68,0.12)"}}>📄</div>
-                    <div>
-                      <div className="dh-alert-title">Missing Qualification Document — {b.name}</div>
-                      <div className="dh-alert-desc">Client has not uploaded proof of professional qualification</div>
                     </div>
                     <div className="dh-alert-time">Today</div>
                   </div>
@@ -1778,23 +2579,27 @@ export default function AdminDashboard() {
                   <div className="dh-panel">
                     <div className="dh-panel-hd"><div className="dh-panel-title">Revenue by Day</div></div>
                     <div style={{padding:"20px 20px 10px"}}>
-                      <div className="dh-bars" style={{height:140}}>
-                        {[["Mon",45000],["Tue",70000],["Wed",90000],["Thu",55000],["Fri",65000],["Sat",30000]].map(([d,v]) => (
-                          <div key={d} className="dh-bar-grp">
-                            <div style={{fontSize:10,color:"#888",marginBottom:4}}>Ksh {(v/1000).toFixed(0)}k</div>
-                            <div className="dh-bar" style={{height:`${v/1000}%`,background:`rgba(240,123,43,${0.3+v/300000})`}}></div>
-                            <div className="dh-bar-lbl">{d}</div>
-                          </div>
-                        ))}
-                      </div>
+                      {revenueByDay.length === 0 ? (
+                        <div className="dh-empty">No revenue data from bookings yet</div>
+                      ) : (
+                        <div className="dh-bars" style={{height:140}}>
+                          {revenueByDay.map(([d,v]) => (
+                            <div key={d} className="dh-bar-grp">
+                              <div style={{fontSize:10,color:"#888",marginBottom:4}}>Ksh {(v/1000).toFixed(0)}k</div>
+                              <div className="dh-bar" style={{height:`${Math.max(8, v/1000)}%`,background:`rgba(240,123,43,${0.3+v/300000})`}}></div>
+                              <div className="dh-bar-lbl">{d}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="dh-panel">
                     <div className="dh-panel-hd"><div className="dh-panel-title">Bookings by Room</div></div>
                     <div style={{padding:20,display:"flex",flexDirection:"column",gap:16}}>
-                      {ROOMS.map((room,i) => {
+                      {calendarRooms.map((room,i) => {
                         const count = bookings.filter(b=>b.room===room).length;
-                        const pct = Math.round((count/bookings.length)*100);
+                        const pct = bookings.length ? Math.round((count/bookings.length)*100) : 0;
                         const colors = ["#F07B2B","#3B82F6","#22C55E"];
                         return (
                           <div key={room}>
@@ -1812,7 +2617,11 @@ export default function AdminDashboard() {
                     <div style={{padding:"0 20px 20px"}}>
                       <div style={{background:"rgba(240,123,43,0.08)",border:"1px solid rgba(240,123,43,0.15)",borderRadius:8,padding:14}}>
                         <div style={{fontSize:11,color:"#F07B2B",fontWeight:700,marginBottom:4}}>💡 Insight</div>
-                        <div style={{fontSize:12,color:"#888",lineHeight:1.6}}>Private Office is the most in-demand space. Consider adding capacity or increasing the rate.</div>
+                        <div style={{fontSize:12,color:"#888",lineHeight:1.6}}>
+                          {topRoom
+                            ? `${topRoom[0]} currently leads with ${topRoom[1]} booking${topRoom[1] === 1 ? "" : "s"}.`
+                            : "No booking volume insight yet. Create or fetch bookings to populate this panel."}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1822,6 +2631,201 @@ export default function AdminDashboard() {
 
           </div>
         </main>
+
+{/* ── VIEW LEAD MODAL ── */}
+        {viewLead && (
+          <div className="dh-modal-overlay" onClick={() => setViewLead(null)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Lead Details</div>
+                <button className="dh-modal-close" onClick={() => setViewLead(null)}>✕</button>
+              </div>
+              <div className="dh-modal-body">
+                <div className="dh-form-group">
+                  <label>Full Name</label>
+                  <div>{viewLead.name || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Email Address</label>
+                  <div>{viewLead.email || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Phone Number</label>
+                  <div>{viewLead.phone || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Lead Stage</label>
+                  <div>{viewLead.stage === "follow-up" ? "Follow Up" : String(viewLead.stage || "new").charAt(0).toUpperCase() + String(viewLead.stage || "new").slice(1)}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Message / Notes</label>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{viewLead.note || "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Created</label>
+                  <div>{viewLead.createdAt ? new Date(viewLead.createdAt).toLocaleString() : "—"}</div>
+                </div>
+                <div className="dh-form-group">
+                  <label>Lead ID</label>
+                  <div style={{ wordBreak: "break-all", color: "#888", fontSize: 12 }}>{String(viewLead.id || "—")}</div>
+                </div>
+              </div>
+              <div className="dh-modal-ft">
+                <button className="dh-btn-cancel" onClick={() => setViewLead(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+ {/* ── CAPTURE LEAD MODAL ── */}
+        {showLeadModal && (
+          <div className="dh-modal-overlay" onClick={() => setShowLeadModal(false)}>
+            <div className="dh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="dh-modal-hd">
+                <div className="dh-modal-title">Capture Lead</div>
+                <button className="dh-modal-close" onClick={() => setShowLeadModal(false)}>✕</button>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newLeadData.name.trim()) {
+                    addToast("Lead name is required", "red", "!");
+                    return;
+                  }
+                  if (!token) {
+                    addToast("Authentication token is missing", "red", "!");
+                    return;
+                  }
+                  setLeadSubmitting(true);
+                  try {
+                    const response = await fetch(`${API_BASE_URL}/api/contact`, {
+                      method: "POST",
+                      headers: {
+                        Accept: "*/*",
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        fullName: newLeadData.name.trim(),
+                        email: newLeadData.email.trim(),
+                        phoneNumber: newLeadData.phone.trim(),
+                        message: newLeadData.notes.trim(),
+                      }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                      addToast(data.message || "Failed to capture lead", "red", "!");
+                      return;
+                    }
+
+                    const randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16);
+                    const createdLead =
+                      (data && typeof data.contact === "object" && data.contact) ||
+                      (data && typeof data.lead === "object" && data.lead) ||
+                      (data && typeof data.data === "object" && data.data) ||
+                      {};
+                    const leadName = createdLead.fullName || newLeadData.name.trim();
+                    const leadPhone =
+                      typeof createdLead.phoneNumber === "string"
+                        ? createdLead.phoneNumber.trim()
+                        : newLeadData.phone.trim();
+
+                    setLeads(prev => [
+                      {
+                        id: createdLead.id || Date.now(),
+                        name: leadName,
+                        initials: getInitials(leadName),
+                        color: randomColor,
+                        stage: newLeadData.stage,
+                        phone: leadPhone,
+                        email: createdLead.email || newLeadData.email.trim(),
+                        note: createdLead.message || newLeadData.notes.trim(),
+                        createdAt: createdLead.createdAt || new Date().toISOString(),
+                      },
+                      ...prev,
+                    ]);
+
+                    addToast(data.message || `${leadName} added to pipeline!`, "green", "✓");
+                    setShowLeadModal(false);
+                    setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
+                  } catch {
+                    addToast("Could not reach the leads API.", "red", "!");
+                  } finally {
+                    setLeadSubmitting(false);
+                  }
+                }}
+              >
+                <div className="dh-modal-body">
+                  <div style={{ fontSize: 12, color: "#888", marginTop: -4 }}>
+                    Save a new contact message into the leads pipeline.
+                  </div>
+                  <div className="dh-form-row">
+                    <div className="dh-form-group">
+                      <label>Full Name *</label>
+                      <input
+                        type="text"
+                        placeholder="John Doe"
+                        value={newLeadData.name}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="dh-form-group">
+                      <label>Phone Number</label>
+                      <input
+                        type="tel"
+                        placeholder="07454491093"
+                        value={newLeadData.phone}
+                        onChange={(e) => setNewLeadData({ ...newLeadData, phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dh-form-group">
+                    <label>Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="johndoe@gmail.com"
+                      value={newLeadData.email}
+                      onChange={(e) => setNewLeadData({ ...newLeadData, email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="dh-form-group">
+                    <label>Message</label>
+                    <textarea
+                      rows="3"
+                      placeholder="Testing the API"
+                      value={newLeadData.notes}
+                      onChange={(e) => setNewLeadData({ ...newLeadData, notes: e.target.value })}
+                      style={{ resize: "vertical" }}
+                    />
+                  </div>
+                </div>
+                <div className="dh-modal-ft">
+                  <button 
+                    type="button" 
+                    className="dh-btn-cancel" 
+                    onClick={() => {
+                      setShowLeadModal(false);
+                      setNewLeadData({ name: '', phone: '', email: '', stage: 'new', notes: '' });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="dh-btn-primary"
+                    disabled={leadSubmitting}
+                  >
+                    {leadSubmitting ? "Saving..." : "Save Lead"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* ── BOOKING DETAIL MODAL ── */}
         {viewBooking && (
@@ -1848,7 +2852,6 @@ export default function AdminDashboard() {
                   ["Time Slot",   viewBooking.slot],
                   ["Amount",      `Ksh ${viewBooking.amount.toLocaleString()}`],
                   ["Payment",     viewBooking.payment],
-                  ["Document",    viewBooking.doc ? "✅ Uploaded" : "❌ Missing"],
                 ].map(([k,v]) => (
                   <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
                     <span style={{fontSize:12,color:"#888"}}>{k}</span>
@@ -1870,57 +2873,86 @@ export default function AdminDashboard() {
 
         {/* ── NEW BOOKING MODAL ── */}
         {showModal && (
-          <div className="dh-modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="dh-modal-overlay" onClick={closeBookingModal}>
             <div className="dh-modal" onClick={e => e.stopPropagation()}>
               <div className="dh-modal-hd">
                 <div className="dh-modal-title">New Booking</div>
-                <button className="dh-modal-close" onClick={() => setShowModal(false)}>✕</button>
+                <button className="dh-modal-close" onClick={closeBookingModal}>✕</button>
               </div>
               <div className="dh-modal-body">
                 <div className="dh-form-row">
                   <div className="dh-form-group">
-                    <label>Client Name *</label>
-                    <input placeholder="Jane Mwangi" value={newBooking.name} onChange={e => setNewBooking(p=>({...p,name:e.target.value}))}/>
+                    <label>Client *</label>
+                    <select
+                      value={newBooking.userId}
+                      onChange={(e) => {
+                        const selectedUser = memberUserOptions.find((u) => String(u.id) === String(e.target.value));
+                        setNewBooking((p) => ({
+                          ...p,
+                          userId: e.target.value,
+                          name: selectedUser?.name || "",
+                        }));
+                      }}
+                    >
+                      <option value="">Select client</option>
+                      {memberUserOptions.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name || member.email || member.id}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="dh-form-group">
-                    <label>Client Type</label>
-                    <select value={newBooking.type} onChange={e => setNewBooking(p=>({...p,type:e.target.value}))}>
-                      <option>ADR Practitioner</option>
-                      <option>Young Advocate</option>
-                      <option>DR Hub Member</option>
-                    </select>
+                    <label>Number of Attendees *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={newBooking.roomCapacity || undefined}
+                      value={newBooking.numberOfAttendees}
+                      onChange={(e) => setNewBooking((p) => ({ ...p, numberOfAttendees: e.target.value }))}
+                    />
                   </div>
                 </div>
                 <div className="dh-form-row">
                   <div className="dh-form-group">
                     <label>Room</label>
-                    <select value={newBooking.room} onChange={e => setNewBooking(p=>({...p,room:e.target.value}))}>
-                      <option>Private Office</option>
-                      <option>Boardroom</option>
-                      <option>Combined</option>
-                    </select>
+                    <input value={newBooking.room || "-"} readOnly />
                   </div>
                   <div className="dh-form-group">
                     <label>Time Slot</label>
-                    <select value={newBooking.slot} onChange={e => setNewBooking(p=>({...p,slot:e.target.value}))}>
-                      {SLOTS.map(s => <option key={s}>{s}</option>)}
-                    </select>
+                    <input value={newBooking.slot || "-"} readOnly />
                   </div>
                 </div>
                 <div className="dh-form-row">
                   <div className="dh-form-group">
-                    <label>Date *</label>
-                    <input type="date" value={newBooking.date} onChange={e => setNewBooking(p=>({...p,date:e.target.value}))}/>
+                    <label>Date</label>
+                    <input value={newBooking.date || "-"} readOnly />
                   </div>
                   <div className="dh-form-group">
-                    <label>Amount (Ksh) *</label>
-                    <input type="number" placeholder="6000" value={newBooking.amount} onChange={e => setNewBooking(p=>({...p,amount:e.target.value}))}/>
+                    <label>Total Cost (Ksh)</label>
+                    <input value={newBooking.amount || "-"} readOnly />
+                  </div>
+                </div>
+                <div className="dh-form-row">
+                  <div className="dh-form-group">
+                    <label>Room Capacity</label>
+                    <input value={newBooking.roomCapacity || "-"} readOnly />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Slot ID</label>
+                    <input value={newBooking.slotId || "-"} readOnly />
+                  </div>
+                  <div className="dh-form-group">
+                    <label>Room ID</label>
+                    <input value={newBooking.roomId || "-"} readOnly />
                   </div>
                 </div>
               </div>
               <div className="dh-modal-ft">
-                <button className="dh-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-                <button className="dh-btn-primary" onClick={submitNewBooking}>Create Booking</button>
+                <button className="dh-btn-cancel" onClick={closeBookingModal}>Cancel</button>
+                <button className="dh-btn-primary" onClick={submitNewBooking} disabled={bookingSubmitting}>
+                  {bookingSubmitting ? "Creating..." : "Create Booking"}
+                </button>
               </div>
             </div>
           </div>
@@ -2227,6 +3259,21 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="dh-form-group">
+                    <label>Cost (Ksh) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 6000"
+                      value={editingRoomId ? editRoomData.cost : newRoomData.cost}
+                      onChange={(e) => editingRoomId
+                        ? setEditRoomData({ ...editRoomData, cost: e.target.value })
+                        : setNewRoomData({ ...newRoomData, cost: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="dh-form-group">
                     <label>Description</label>
                     <textarea
                       placeholder="Brief description of the room..."
@@ -2272,4 +3319,3 @@ export default function AdminDashboard() {
     </>
   );
 }
-

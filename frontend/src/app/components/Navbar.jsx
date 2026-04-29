@@ -10,6 +10,7 @@ const navLinks = [
   { label: "Amenities", href: "/#amenities" },
   { label: "How it works", href: "/#process" },
   { label: "Reviews", href: "/#testimonials" },
+  { label: "Contact Us", href: "/contact" },
 ];
 
 export function Navbar() {
@@ -40,7 +41,7 @@ export function Navbar() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-300",
         scrolled || open
-          ? "border-white/10 bg-black/85 backdrop-blur-md"
+          ? "border-white/10 bg-[#050505]"
           : "border-transparent bg-gradient-to-b from-black/70 to-transparent backdrop-blur-[2px]"
       )}
     >
@@ -65,12 +66,21 @@ export function Navbar() {
         <ul className="hidden items-center gap-1 lg:flex">
           {navLinks.map(({ label, href }) => (
             <li key={href}>
-              <a
-                href={href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {label}
-              </a>
+              {href.startsWith("/#") ? (
+                <a
+                  href={href}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {label}
+                </a>
+              ) : (
+                <Link
+                  to={href}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {label}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -102,22 +112,33 @@ export function Navbar() {
       <div
         id="mobile-nav"
         className={cn(
-          "fixed inset-x-0 top-[4.25rem] bottom-0 z-40 bg-black/95 backdrop-blur-lg transition-opacity duration-200 lg:hidden",
+          "fixed inset-x-0 top-[4.25rem] bottom-0 z-40 bg-[#050505] transition-opacity duration-200 lg:hidden",
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         )}
         aria-hidden={!open}
       >
         <div className="mx-auto flex max-w-[1280px] flex-col gap-1 px-4 py-6 sm:px-6">
-          {navLinks.map(({ label, href }) => (
-            <a
-              key={href}
-              href={href}
-              className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
-              onClick={() => setOpen(false)}
-            >
-              {label}
-            </a>
-          ))}
+          {navLinks.map(({ label, href }) =>
+            href.startsWith("/#") ? (
+              <a
+                key={href}
+                href={href}
+                className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
+                onClick={() => setOpen(false)}
+              >
+                {label}
+              </a>
+            ) : (
+              <Link
+                key={href}
+                to={href}
+                className="rounded-lg px-4 py-3 text-lg font-medium text-white/90 hover:bg-white/5"
+                onClick={() => setOpen(false)}
+              >
+                {label}
+              </Link>
+            )
+          )}
           <hr className="my-4 border-white/10" />
           <Button variant="ghost" asChild className="justify-start text-white hover:bg-white/10">
             <Link to="/login" onClick={() => setOpen(false)}>

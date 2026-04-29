@@ -1,5 +1,5 @@
 const { createTransporter } = require('./transporter');
-const { buildWelcomeEmail, buildActivationEmail } = require('./templates');
+const { buildWelcomeEmail, buildActivationEmail, buildBookingPendingEmail } = require('./templates');
 
 async function sendEmail({ to, subject, text, html }) {
   const transporter = createTransporter();
@@ -33,8 +33,21 @@ async function sendActivationEmail({ to, name, activationUrl }) {
   return sendEmail({ to, subject, text, html });
 }
 
+async function sendBookingPendingEmail({ to, name, reference, roomName, date, slot, amountDue }) {
+  const { subject, text, html } = buildBookingPendingEmail({
+    name,
+    reference,
+    roomName,
+    date,
+    slot,
+    amountDue,
+  });
+  return sendEmail({ to, subject, text, html });
+}
+
 module.exports = {
   sendEmail,
   sendWelcomeEmail,
   sendActivationEmail,
+  sendBookingPendingEmail
 };

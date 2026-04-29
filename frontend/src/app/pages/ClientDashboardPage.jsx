@@ -5,83 +5,415 @@ import { Footer } from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Calendar, Clock, TrendingUp, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import ReviewsPanel from '../components/ReviewsPanel';
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "../components/ui/button";
+import {
+  Calendar,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  Trash2,
+  Download,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Plus,
+  TrendingUp,
+  Upload,
+  UserCircle2,
+  X,
+} from "lucide-react";
+
+const stats = [
+  { label: "Total Bookings", value: "12", icon: Calendar, trend: "+2 this month" },
+  { label: "Upcoming Sessions", value: "3", icon: Clock, trend: "Next: Tomorrow" },
+  { label: "Completed", value: "8", icon: CheckCircle, trend: "100% attendance" },
+  { label: "Total Spent", value: "Ksh 42K", icon: CreditCard, trend: "Member savings: 4.2K" },
+];
+
+const upcomingBookings = [
+  { id: "DRH-20250401-001", room: "Boardroom", date: "Apr 1, 2025", time: "10:00am - 1:00pm", status: "confirmed", amount: 4500 },
+  { id: "DRH-20250405-002", room: "Private Office", date: "Apr 5, 2025", time: "2:00pm - 5:00pm", status: "pending", amount: 3000 },
+  { id: "DRH-20250410-003", room: "Combined Space", date: "Apr 10, 2025", time: "10:00am - 1:00pm", status: "confirmed", amount: 6000 },
+];
+
+const checkins = [
+  { bookingId: "DRH-20250401-001", date: "Apr 1, 2025", time: "9:45am", method: "QR Check-in" },
+  { bookingId: "DRH-20250315-001", date: "Mar 15, 2025", time: "9:50am", method: "Front desk" },
+];
+
+const payments = [
+  { reference: "PAY-74821", date: "Mar 15, 2025", amount: "Ksh 4,500", status: "Paid" },
+  { reference: "PAY-74875", date: "Apr 5, 2025", amount: "Ksh 3,000", status: "Pending" },
+];
+
+function getStatusBadge(status) {
+  const styles = {
+    confirmed: "bg-[#2E7D32]/10 text-[#2E7D32] border-[#2E7D32]/20",
+    pending: "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20",
+    paid: "bg-[#2E7D32]/10 text-[#2E7D32] border-[#2E7D32]/20",
+    verified: "bg-[#2E7D32]/10 text-[#2E7D32] border-[#2E7D32]/20",
+  };
+  return (
+    <span className={`rounded border px-3 py-1 text-xs ${styles[status.toLowerCase()] || "border-white/10 text-white/70"}`}>
+      {status}
+    </span>
+  );
+}
 
 export function ClientDashboard() {
-  const [showPastBookings, setShowPastBookings] = useState(false);
+  const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState("metrics");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [documents, setDocuments] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState("");
+  const [documentName, setDocumentName] = useState("");
+  const [documentFile, setDocumentFile] = useState(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    id: "",
+    name: "",
+    email: "",
+    phoneNumber: "",
+    gender: "",
+    address: "",
+    city: "",
+    country: "",
+    occupation: "",
+    status: "",
+    role: "",
+    createdAt: "",
+    updatedAt: "",
+  });
 
-  const stats = [
-    { label: 'Total Bookings', value: '12', icon: Calendar, trend: '+2 this month' },
-    { label: 'Upcoming Sessions', value: '3', icon: Clock, trend: 'Next: Tomorrow' },
-    { label: 'Completed', value: '8', icon: CheckCircle, trend: '100% attendance' },
-    { label: 'Total Spent', value: 'Ksh 42K', icon: TrendingUp, trend: 'Member savings: 4.2K' },
+  useEffect(() => {
+    fetchUserProfile();
+    fetchDocuments();
+  }, []);
+
+  const getStoredAccessToken = () => {
+    const directToken =
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("accessToken") ||
+      localStorage.getItem("token");
+
+    if (directToken) return directToken;
+
+    const jsonTokenSources = ["auth", "session", "userSession"];
+    for (const key of jsonTokenSources) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        const nestedToken =
+          parsed?.accessToken ||
+          parsed?.token ||
+          parsed?.authToken ||
+          parsed?.data?.accessToken ||
+          parsed?.data?.token;
+
+        if (nestedToken) return nestedToken;
+      } catch {
+        // ignore malformed JSON storage and continue trying other keys
+      }
+    }
+
+    return "";
+  };
+
+  const fetchUserProfile = async () => {
+    setProfileLoading(true);
+    try {
+      const token = getStoredAccessToken();
+
+      if (!token) {
+        console.warn("No auth token found. Using mock data.");
+        setProfileForm({
+          id: "mock-id",
+          name: "John Doe",
+          email: "john.doe@example.com",
+          phoneNumber: "+254745491094",
+          gender: "MALE",
+          address: "",
+          city: "",
+          country: "",
+          occupation: "Divorce Lawyer",
+          status: "ACTIVE",
+          role: "MEMBER",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        setProfileLoading(false);
+        return;
+      }
+
+      const response = await fetch("http://localhost:3000/api/users/profile", {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profile");
+      }
+
+      const data = await response.json();
+      if (data.user) {
+        setProfileForm({
+          id: data.user.id || "",
+          name: data.user.name || "",
+          email: data.user.email || "",
+          phoneNumber: data.user.phoneNumber || "",
+          gender: data.user.gender || "",
+          address: data.user.address || "",
+          city: data.user.city || "",
+          country: data.user.country || "",
+          occupation: data.user.occupation || "",
+          status: data.user.status || "",
+          role: data.user.role || "",
+          createdAt: data.user.createdAt || "",
+          updatedAt: data.user.updatedAt || "",
+        });
+      } else {
+        setProfileForm({
+          id: "no-user-payload",
+          name: "User",
+          email: "",
+          phoneNumber: "",
+          gender: "",
+          address: "",
+          city: "",
+          country: "",
+          occupation: "",
+          status: "ACTIVE",
+          role: "MEMBER",
+          createdAt: "",
+          updatedAt: "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      setProfileForm({
+        id: "error-id",
+        name: "User",
+        email: "",
+        phoneNumber: "",
+        gender: "",
+        address: "",
+        city: "",
+        country: "",
+        occupation: "",
+        status: "ACTIVE",
+        role: "MEMBER",
+        createdAt: "",
+        updatedAt: "",
+      });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    setDocumentsLoading(true);
+    setDocumentsError("");
+    try {
+      const token = getStoredAccessToken();
+      if (!token) {
+        setDocuments([]);
+        setDocumentsError("No access token found. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch("http://localhost:3000/api/documents", {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to fetch documents");
+      }
+
+      const data = await response.json();
+      setDocuments(Array.isArray(data.documents) ? data.documents : []);
+    } catch (error) {
+      setDocuments([]);
+      setDocumentsError("Could not load documents.");
+      console.error("Error fetching documents:", error);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const handleUploadDocument = async (event) => {
+    event.preventDefault();
+    setDocumentsError("");
+
+    if (!documentFile) {
+      setDocumentsError("Please select a file to upload.");
+      return;
+    }
+
+    const token = getStoredAccessToken();
+    if (!token) {
+      setDocumentsError("No access token found. Please sign in again.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("documentName", (documentName || documentFile.name).trim());
+    formData.append("document", documentFile);
+
+    setUploadingDocument(true);
+    try {
+      const response = await fetch("http://localhost:3000/api/documents", {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to upload document");
+      }
+
+      setDocumentName("");
+      setDocumentFile(null);
+      await fetchDocuments();
+    } catch (error) {
+      setDocumentsError("Upload failed. Please try again.");
+      console.error("Error uploading document:", error);
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setDocumentsError("No access token found. Please sign in again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/documents/${documentId}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to delete document");
+      }
+
+      await fetchDocuments();
+    } catch (error) {
+      setDocumentsError("Delete failed. Please try again.");
+      console.error("Error deleting document:", error);
+    }
+  };
+
+  const handleDownloadDocument = async (documentItem) => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setDocumentsError("No access token found. Please sign in again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(documentItem.downloadUrl, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to download document");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = documentItem.documentName || "document";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setDocumentsError("Download failed. Please try again.");
+      console.error("Error downloading document:", error);
+    }
+  };
+
+  const handleViewDocument = async (documentItem) => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setDocumentsError("No access token found. Please sign in again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(documentItem.downloadUrl, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to open document");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch (error) {
+      setDocumentsError("Could not open this document.");
+      console.error("Error viewing document:", error);
+    }
+  };
+
+  const sections = [
+    { id: "metrics", label: "Metrics", icon: LayoutDashboard },
+    { id: "bookings", label: "Bookings", icon: Calendar },
+    { id: "documents", label: "Documents", icon: FileText },
+    { id: "checkins", label: "Check-ins", icon: CheckCircle },
+    { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "profile", label: "Profile", icon: UserCircle2 },
   ];
 
-  const upcomingBookings = [
-    {
-      id: 'DRH-20250401-001',
-      room: 'Boardroom',
-      date: 'Apr 1, 2025',
-      time: '10:00am – 1:00pm',
-      status: 'confirmed',
-      amount: 4500,
-    },
-    {
-      id: 'DRH-20250405-002',
-      room: 'Private Office',
-      date: 'Apr 5, 2025',
-      time: '2:00pm – 5:00pm',
-      status: 'pending',
-      amount: 3000,
-    },
-    {
-      id: 'DRH-20250410-003',
-      room: 'Combined Space',
-      date: 'Apr 10, 2025',
-      time: '10:00am – 1:00pm',
-      status: 'confirmed',
-      amount: 6000,
-    },
-  ];
+  const selectSection = (sectionId) => {
+    setActiveSection(sectionId);
+    setSidebarOpen(false);
+  };
 
-  const pastBookings = [
-    {
-      id: 'DRH-20250315-001',
-      room: 'Boardroom',
-      date: 'Mar 15, 2025',
-      time: '10:00am – 1:00pm',
-      status: 'completed',
-      amount: 4500,
-    },
-    {
-      id: 'DRH-20250310-002',
-      room: 'Private Office',
-      date: 'Mar 10, 2025',
-      time: '2:00pm – 5:00pm',
-      status: 'completed',
-      amount: 3000,
-    },
-  ];
-
-  const getStatusBadge = (status) => {
-    const styles = {
-      confirmed: 'bg-[#2E7D32]/10 text-[#2E7D32] border-[#2E7D32]/20',
-      pending: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',
-      completed: 'bg-white/5 text-white/50 border-white/10',
-      cancelled: 'bg-[#C62828]/10 text-[#C62828] border-[#C62828]/20',
-    };
-
-    const labels = {
-      confirmed: 'Confirmed',
-      pending: 'Pending',
-      completed: 'Completed',
-      cancelled: 'Cancelled',
-    };
-
-    return (
-      <span className={`px-3 py-1 text-xs border ${styles[status]}`}>
-        {labels[status]}
-      </span>
-    );
+  const handleLogout = () => {
+    localStorage.removeItem("isLoggedIn");
+    navigate("/login");
   };
 
   return (
@@ -96,7 +428,108 @@ export function ClientDashboard() {
               My Dashboard
             </h1>
             <p className="text-white/50">Manage your bookings and view your history</p>
+  const renderContent = () => {
+    if (activeSection === "bookings") {
+      return (
+        <section className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Your Bookings</h2>
+              <p className="mt-1 text-sm text-white/50">Manage and track your workspace reservations</p>
+            </div>
+            <Link to="/booking">
+              <Button className="inline-flex items-center gap-2 rounded-lg bg-[#E87722] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E87722]/20 transition-all hover:bg-[#d46a1a] hover:shadow-[#E87722]/30">
+                <Plus className="h-4 w-4" />
+                New Booking
+              </Button>
+            </Link>
           </div>
+
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px]">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.02]">
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Booking ID</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Room</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Date</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Time</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Amount</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-white/70">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcomingBookings.map((booking, index) => (
+                    <tr key={booking.id} className="group border-b border-white/5 transition-colors hover:bg-white/[0.02]">
+                      <td className="px-4 py-4 text-sm font-mono text-white/60">{booking.id}</td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm font-medium text-white">{booking.room}</span>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-white/70">{booking.date}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{booking.time}</td>
+                      <td className="px-4 py-4">{getStatusBadge(booking.status)}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-white">Ksh {booking.amount.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right">
+                        <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === "documents") {
+      const formatDocumentDate = (value) => {
+        if (!value) return "Unknown date";
+        const date = new Date(value);
+        return date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+      };
+
+      return (
+        <section className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Documents</h2>
+              <p className="mt-1 text-sm text-white/50">Manage your credentials and verification documents</p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleUploadDocument}
+            className="grid gap-3 rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-4 md:grid-cols-[1.3fr_1fr_auto]"
+          >
+            <input
+              type="text"
+              value={documentName}
+              onChange={(e) => setDocumentName(e.target.value)}
+              placeholder="Document name (optional)"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none focus:border-[#E87722]/50"
+            />
+            <input
+              type="file"
+              onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-[#E87722] file:px-3 file:py-1.5 file:text-white"
+            />
+            <Button
+              type="submit"
+              disabled={uploadingDocument}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E87722] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#d46a1a] disabled:opacity-60"
+            >
+              <Upload className="h-4 w-4" />
+              {uploadingDocument ? "Uploading..." : "Upload"}
+            </Button>
+          </form>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
@@ -226,7 +659,427 @@ export function ClientDashboard() {
                   </div>
                 )}
               </div>
+          {documentsError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {documentsError}
             </div>
+          ) : null}
+
+          {documentsLoading ? (
+            <div className="rounded-xl border border-white/10 bg-[#0F0F0F] p-6 text-sm text-white/60">Loading documents...</div>
+          ) : null}
+
+          {!documentsLoading && documents.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-[#0F0F0F] p-6 text-sm text-white/60">
+              No documents uploaded yet.
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {documents.map((documentItem) => (
+              <div key={documentItem.id} className="group overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-5 transition-all hover:border-[#E87722]/30 hover:shadow-lg hover:shadow-[#E87722]/10">
+                <div className="mb-4 flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E87722]/10 text-[#E87722]">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">{documentItem.documentName}</p>
+                      <p className="mt-0.5 text-xs text-white/50">Uploaded: {formatDocumentDate(documentItem.createdAt)}</p>
+                    </div>
+                  </div>
+                  {getStatusBadge(documentItem.status || "PENDING")}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadDocument(documentItem)}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/10"
+                  >
+                    <Download className="h-3 w-3" />
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewDocument(documentItem)}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/10"
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDocument(documentItem.id)}
+                    className="flex items-center justify-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/20"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === "checkins") {
+      return (
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Check-in History</h2>
+            <p className="mt-1 text-sm text-white/50">Track your arrival records and access history</p>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.02]">
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Booking ID</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Date</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Time</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Method</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checkins.map((checkin) => (
+                    <tr key={`${checkin.bookingId}-${checkin.time}`} className="border-b border-white/5 transition-colors hover:bg-white/[0.02]">
+                      <td className="px-4 py-4 text-sm font-mono text-white/60">{checkin.bookingId}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{checkin.date}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{checkin.time}</td>
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E87722]/10 px-3 py-1 text-xs font-medium text-[#E87722]">
+                          <CheckCircle className="h-3 w-3" />
+                          {checkin.method}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === "payments") {
+      return (
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Payment History</h2>
+            <p className="mt-1 text-sm text-white/50">View your transaction records and invoices</p>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.02]">
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Reference</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Date</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Amount</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/70">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-white/70">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.reference} className="border-b border-white/5 transition-colors hover:bg-white/[0.02]">
+                      <td className="px-4 py-4 text-sm font-mono text-white">{payment.reference}</td>
+                      <td className="px-4 py-4 text-sm text-white/70">{payment.date}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-white">{payment.amount}</td>
+                      <td className="px-4 py-4">{getStatusBadge(payment.status)}</td>
+                      <td className="px-4 py-4 text-right">
+                        <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
+                          Download Receipt
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === "profile") {
+      const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+        const date = new Date(dateString);
+        return date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      };
+
+      const getInitials = (name) => {
+        if (!name) return "U";
+        const parts = name.split(" ");
+        return parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : parts[0][0].toUpperCase();
+      };
+
+      if (profileLoading) {
+        return (
+          <section className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#E87722]/20 border-t-[#E87722]" />
+              <p className="mt-4 text-white/50">Loading profile...</p>
+            </div>
+          </section>
+        );
+      }
+
+      return (
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Profile Settings</h2>
+            <p className="mt-1 text-sm text-white/50">Manage your personal information and account details</p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6 md:p-8">
+            <div className="mb-8 flex items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#E87722] to-[#d46a1a] text-2xl font-bold text-white shadow-lg shadow-[#E87722]/30">
+                {getInitials(profileForm.name)}
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">{profileForm.name || "User"}</h3>
+                <p className="text-sm text-white/50">{profileForm.occupation || "No occupation specified"}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-xs font-medium text-[#2E7D32]">
+                    {profileForm.role}
+                  </span>
+                  <span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-xs font-medium text-[#2E7D32]">
+                    {profileForm.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <form className="space-y-6">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label htmlFor="name" className="mb-2 block text-sm font-medium text-white/80">
+                    Full Name
+                  </label>
+                  <input
+                    id="name"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="mb-2 block text-sm font-medium text-white/80">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.email}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="phoneNumber" className="mb-2 block text-sm font-medium text-white/80">
+                    Phone Number
+                  </label>
+                  <input
+                    id="phoneNumber"
+                    type="tel"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.phoneNumber}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="gender" className="mb-2 block text-sm font-medium text-white/80">
+                    Gender
+                  </label>
+                  <select
+                    id="gender"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.gender}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, gender: e.target.value }))}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="occupation" className="mb-2 block text-sm font-medium text-white/80">
+                    Occupation
+                  </label>
+                  <input
+                    id="occupation"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.occupation}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, occupation: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="address" className="mb-2 block text-sm font-medium text-white/80">
+                    Address
+                  </label>
+                  <input
+                    id="address"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.address}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, address: e.target.value }))}
+                    placeholder="Street address"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="city" className="mb-2 block text-sm font-medium text-white/80">
+                    City
+                  </label>
+                  <input
+                    id="city"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.city}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, city: e.target.value }))}
+                    placeholder="e.g. Nairobi"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="country" className="mb-2 block text-sm font-medium text-white/80">
+                    Country
+                  </label>
+                  <input
+                    id="country"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition-all focus:border-[#E87722]/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#E87722]/20"
+                    value={profileForm.country}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, country: e.target.value }))}
+                    placeholder="e.g. Kenya"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-white/10 pt-6">
+                <h4 className="mb-4 text-sm font-semibold text-white/80">Account Information</h4>
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-white/50">
+                      Account Created
+                    </label>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/70">
+                      {formatDate(profileForm.createdAt)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-white/50">
+                      Last Updated
+                    </label>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/70">
+                      {formatDate(profileForm.updatedAt)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Button type="button" className="rounded-lg bg-[#E87722] px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E87722]/20 transition-all hover:bg-[#d46a1a] hover:shadow-[#E87722]/30">
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Overview</h2>
+          <p className="mt-1 text-sm text-white/50">Your workspace activity at a glance</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <article
+                key={stat.label}
+                className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6 transition-all hover:border-[#E87722]/30 hover:shadow-lg hover:shadow-[#E87722]/10"
+              >
+                <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-[#E87722]/5 blur-2xl transition-all group-hover:bg-[#E87722]/10" />
+                <div className="relative">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#E87722]/10 text-[#E87722] transition-all group-hover:scale-110 group-hover:bg-[#E87722]/15">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <p className="text-3xl font-bold text-white md:text-4xl">{stat.value}</p>
+                  <p className="mt-2 text-sm font-medium text-white/60">{stat.label}</p>
+                  <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#E87722]">
+                    <TrendingUp className="h-3 w-3" />
+                    {stat.trend}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">Quick Actions</h3>
+            <div className="space-y-3">
+              <Link to="/booking">
+                <button className="flex w-full items-center gap-3 rounded-lg bg-white/5 p-4 text-left text-white transition-all hover:bg-white/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E87722]/10 text-[#E87722]">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Book a Space</p>
+                    <p className="text-xs text-white/50">Reserve your next workspace</p>
+                  </div>
+                  <ChevronRight className="ml-auto h-5 w-5 text-white/30" />
+                </button>
+              </Link>
+              <button
+                onClick={() => setActiveSection("documents")}
+                className="flex w-full items-center gap-3 rounded-lg bg-white/5 p-4 text-left text-white transition-all hover:bg-white/10"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E87722]/10 text-[#E87722]">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-medium">Upload Documents</p>
+                  <p className="text-xs text-white/50">Add credentials or verification files</p>
+                </div>
+                <ChevronRight className="ml-auto h-5 w-5 text-white/30" />
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">Upcoming Sessions</h3>
+            <div className="space-y-3">
+              {upcomingBookings.slice(0, 2).map((booking) => (
+                <div key={booking.id} className="rounded-lg bg-white/5 p-4">
+                  <div className="mb-2 flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-white">{booking.room}</p>
+                      <p className="text-xs text-white/50">{booking.date}</p>
+                    </div>
+                    {getStatusBadge(booking.status)}
+                  </div>
+                  <p className="text-xs text-white/70">{booking.time}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
 
             {/* Right rail: Reviews (visible on all screens, flows below on mobile) */}
             <div className="lg:col-span-1">
@@ -234,11 +1087,94 @@ export function ClientDashboard() {
                 <ReviewsPanel />
               </div>
             </div>
+  return (
+    <div className="min-h-screen bg-[#0A0A0A]">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0D0D0D]/95 backdrop-blur-lg">
+        <div className="flex h-16 items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-4">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 w-10 p-0 text-white hover:bg-white/10 lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-lg font-bold text-white">DR Hub</h1>
+              <p className="text-xs text-white/50">Client Portal</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3 sm:flex">
+              <div className="text-right">
+                <p className="text-sm font-medium text-white">{profileForm.name || "User"}</p>
+                <p className="text-xs text-white/50">{profileForm.occupation || profileForm.role}</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#E87722] to-[#d46a1a] text-sm font-bold text-white shadow-lg">
+                {profileForm.name ? profileForm.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "U"}
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      <Footer />
+      <div className="flex">
+        <aside
+          className={`fixed inset-y-0 left-0 top-16 z-40 w-72 border-r border-white/10 bg-[#0D0D0D] transition-transform duration-300 lg:static lg:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="h-[calc(100vh-4rem)] overflow-y-auto p-4">
+            <nav className="space-y-1">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                const active = activeSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => selectSection(section.id)}
+                    className={`group relative flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all ${
+                      active
+                        ? "bg-gradient-to-r from-[#E87722]/20 to-[#E87722]/10 text-white shadow-lg shadow-[#E87722]/10"
+                        : "text-white/70 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#E87722]" />
+                    )}
+                    <Icon className={`h-5 w-5 transition-transform ${active ? "text-[#E87722]" : "group-hover:scale-110"}`} />
+                    <span>{section.label}</span>
+                    {active && <ChevronRight className="ml-auto h-4 w-4 text-[#E87722]" />}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        {sidebarOpen && (
+          <button
+            type="button"
+            className="fixed inset-0 top-16 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu overlay"
+          />
+        )}
+
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 }
