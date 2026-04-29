@@ -52,7 +52,7 @@ export const SpaceBox = ({
     };
 
     return (
-        <div className="flex flex-col border-r border-gray-800 gap-6 p-6 md:p-10">
+        <div className="flex flex-col border-r border-slate-700/50 gap-6 p-6 md:p-10">
             <div className="w-full text-start">
                 <h1 className="text-2xl font-semibold text-amber-50">Select your space</h1>
             </div>
@@ -71,7 +71,7 @@ export const SpaceBox = ({
                 ))}
             </div>
 
-            <div className="mt-2 w-full border-t border-slate-800 pt-8">
+            <div className="mt-2 w-full border-t border-slate-700/50 pt-8">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr]">
                     <button
                         type="button"

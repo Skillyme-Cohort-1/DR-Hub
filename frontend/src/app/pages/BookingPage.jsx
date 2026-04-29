@@ -285,7 +285,7 @@ export function BookingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
+    <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
       <BookingHeader />
 
       <main className="mx-auto max-w-3xl px-6 pb-20 pt-28 lg:max-w-4xl lg:px-8 lg:pt-32">
@@ -381,7 +381,7 @@ export function BookingPage() {
                 min={minDate}
                 value={form.date}
                 onChange={(e) => update({ date: e.target.value })}
-                className="w-full max-w-xs rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                className="w-full max-w-xs rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
               />
             </div>
 
@@ -447,7 +447,7 @@ export function BookingPage() {
                   onChange={(e) => update({ fullName: e.target.value })}
                   disabled={userDetailsAreAutofilled}
                   readOnly={userDetailsAreAutofilled}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="Name as it should appear on the booking"
                 />
               </div>
@@ -463,7 +463,7 @@ export function BookingPage() {
                   onChange={(e) => update({ email: e.target.value })}
                   disabled={userDetailsAreAutofilled}
                   readOnly={userDetailsAreAutofilled}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="you@example.com"
                 />
               </div>
@@ -479,7 +479,7 @@ export function BookingPage() {
                   onChange={(e) => update({ phone: e.target.value })}
                   disabled={userDetailsAreAutofilled}
                   readOnly={userDetailsAreAutofilled}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="+254 …"
                 />
               </div>
@@ -495,7 +495,7 @@ export function BookingPage() {
                   max={maxAttendees}
                   value={form.attendees}
                   onChange={(e) => update({ attendees: Math.max(1, Math.min(maxAttendees, Number(e.target.value) || 1)) })}
-                  className="w-full max-w-[200px] rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  className="w-full max-w-[200px] rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                 />
                 <p className="mt-2 text-xs text-white/45">
                   Maximum {maxAttendees} for this reservation type.
@@ -619,7 +619,7 @@ export function BookingPage() {
 
 function BookingHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0F1A2E]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6 lg:px-8">
         <Link
           to="/"

@@ -101,8 +101,8 @@ export function BookingPaymentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur-xl">
+    <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0F1A2E]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6 lg:px-8">
           <Link
             to="/booking"
@@ -203,7 +203,7 @@ export function BookingPaymentPage() {
             type="tel"
             value={mpesaPhone}
             onChange={(e) => setMpesaPhone(e.target.value)}
-            className="w-full max-w-xs rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+            className="w-full max-w-xs rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
             placeholder="e.g. 0712 345 678"
           />
           <p className="mt-2 text-xs text-white/45">Use the number that should receive the STK push prompt.</p>
