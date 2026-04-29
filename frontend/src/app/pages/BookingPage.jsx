@@ -283,7 +283,6 @@ export function BookingPage() {
       setSubmitLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
       <BookingHeader />

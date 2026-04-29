@@ -8,6 +8,7 @@ import { BookingPage } from './app/pages/BookingPage';
 import { BookingPaymentPage } from './app/pages/BookingPaymentPage';
 import { BookingSuccessPage } from './app/pages/BookingSuccessPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
+import { Toaster } from "@/components/ui/sonner"
 import ContactPage from './app/pages/ContactPage';
 
 function isAuthenticated() {
@@ -28,6 +29,7 @@ function PublicOnlyRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster richColors position="top-right"/>
       <Routes>
         <Route path="/" element={isAuthenticated() ? <Navigate to="/dashboard" replace /> : <HomePage />} />
         <Route
