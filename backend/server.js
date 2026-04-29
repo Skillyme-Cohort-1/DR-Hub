@@ -10,7 +10,8 @@ const bookingRoutes = require('./src/routes/bookingRoutes');
 const paymentRoutes = require('./src/routes/paymentRoute');
 const feedbackRoutes = require('./src/routes/feedback.route');
 const contactRoutes = require('./src/routes/contactRoutes');
-const bookingSlotRoutes = require("./src/routes/slotsRoutes")
+const bookingSlotRoutes = require("./src/routes/slotsRoutes");
+const exportRoutes = require('./src/routes/exportRoutes');
 
 const app = express();
 
@@ -27,12 +28,13 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
-app.use('/api/rooms', roomRoutes);  // ← ADD THIS LINE
+app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/contact', contactRoutes);
-app.use('/api/slots', bookingSlotRoutes)
+app.use('/api/slots', bookingSlotRoutes);
+app.use('/api/export', exportRoutes);
 
 app.use((error, req, res, next) => {
   if (error && error.type === 'entity.too.large') {
