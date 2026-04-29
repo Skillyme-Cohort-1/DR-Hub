@@ -1,0 +1,23 @@
+{
+  "googleUrl": "https://maps.app.goo.gl/v6hamTRC9eSktoZ29",
+  "reviews": [
+    {
+      "name": "A. Mwangi",
+      "role": "Advocate, Nairobi",
+      "quote": "The boardroom is quiet, professional, and easy to book. It has become our default space for client meetings.",
+      "rating": 5
+    },
+    {
+      "name": "L. Njeri",
+      "role": "ADR Practitioner",
+      "quote": "The environment feels premium without being distracting. Everything from the soundproofing to the setup is deliberate.",
+      "rating": 5
+    },
+    {
+      "name": "K. Otieno",
+      "role": "Legal Consultant",
+      "quote": "It is rare to find a workspace that balances privacy, convenience, and polish this well. DR Hub does it right.",
+      "rating": 5
+    }
+  ]
+}

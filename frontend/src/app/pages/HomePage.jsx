@@ -1,8 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { rooms } from "../components/serviceRooms";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 import {
@@ -15,8 +14,10 @@ import {
   Star,
   ChevronRight,
 } from "lucide-react";
+import RoomsSection from "../components/RoomsSection";
+import { reviewService } from '../../services/reviewApi';
 
-const testimonials = [
+const staticTestimonials = [
   {
     name: "A. Mwangi",
     role: "Advocate, Nairobi",
@@ -47,6 +48,23 @@ function bookingHref() {
 }
 
 export default function HomePage() {
+  const [testimonials, setTestimonials] = useState(staticTestimonials.slice(0, 3));
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await reviewService.getReviews();
+        if (mounted && data?.reviews?.length) {
+          setTestimonials(data.reviews.slice(0, 3));
+        }
+      } catch (err) {
+        console.error("Error fetching testimonials:", err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const steps = [
     {
       number: 1,
@@ -148,6 +166,7 @@ export default function HomePage() {
               </p>
             </div>
 
+            <RoomsSection />
             <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {rooms.map((room) => {
                 const RoomIcon = room.icon;

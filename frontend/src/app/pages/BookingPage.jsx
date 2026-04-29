@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -8,9 +9,16 @@ import {
   Check,
   Clock,
   Layers,
+  Loader2,
+  MapPin,
+  ParkingCircle,
+  Printer,
   Sparkles,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
+import { roomService } from "@/services/roomApi";
+import { bookingService } from "@/services/bookingApi";
 
 const STEPS = [
   { id: 1, label: "Reservation type" },
@@ -98,6 +106,14 @@ function getAuthUser() {
 export function BookingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [form, setForm] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingRef, setBookingRef] = useState(null);
+  
+  // State for rooms
+  const [rooms, setRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [submitError, setSubmitError] = useState("");
   const [form, setForm] = useState(() => {
     const user = getAuthUser();
     return {
@@ -215,6 +231,72 @@ export function BookingPage() {
 
   const update = (patch) => setForm((f) => ({ ...f, ...patch }));
 
+  const toggleAddOn = (id) => {
+    setForm((f) => ({
+      ...f,
+      addOnIds: f.addOnIds.includes(id) ? f.addOnIds.filter((x) => x !== id) : [...f.addOnIds, id],
+    }));
+  };
+
+  // Fetch rooms on component mount
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const res = await roomService.getAllRooms();
+        setRooms(res.data || []);
+      } catch (err) {
+        console.error('Error fetching rooms:', err);
+        toast.error('Failed to load available rooms. Please refresh the page.');
+      } finally {
+        setLoadingRooms(false);
+      }
+    };
+
+    fetchRooms();
+  }, []);
+  const handleDocumentsChange = async (event) => {
+    const pickedFiles = Array.from(event.target.files || []);
+    if (!pickedFiles.length) return;
+
+    try {
+      const serialized = await Promise.all(
+        pickedFiles.map(async (file) => {
+          const dataURL = await readFileAsDataURL(file);
+          const base64Content = dataURL.includes(",") ? dataURL.split(",")[1] : "";
+          return {
+            name: "",
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            size: file.size,
+            contentBase64: base64Content,
+          };
+        })
+      );
+
+      setForm((prev) => ({
+        ...prev,
+        documents: [...prev.documents, ...serialized],
+      }));
+    } catch {
+      setSubmitError("Some documents could not be read. Please try again.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const removeDocument = (indexToRemove) => {
+    setForm((prev) => ({
+      ...prev,
+      documents: prev.documents.filter((_, index) => index !== indexToRemove),
+    }));
+  };
+
+  const updateDocumentName = (indexToUpdate, name) => {
+    setForm((prev) => ({
+      ...prev,
+      documents: prev.documents.map((doc, index) => (index === indexToUpdate ? { ...doc, name } : doc)),
+    }));
+  };
   const userDetailsAreAutofilled = Boolean(authUser);
 
   const canGoNext = () => {
@@ -242,6 +324,111 @@ export function BookingPage() {
     if (step > 1) setStep((s) => s - 1);
   };
 
+
+  const handleSubmit = async () => {
+    if (!selectedType) return;
+    const hasUnnamedDocuments = form.documents.some((doc) => !doc.name?.trim());
+    if (hasUnnamedDocuments) {
+      setSubmitError("Please provide a name for every uploaded document.");
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      // Validate required fields
+      if (!form.reservationTypeId || !form.date || !form.slotId) {
+        toast.error('Please fill in all required fields');
+        setSubmitting(false);
+        return;
+      }
+
+      // Find available room for this type
+      // toast.loading('🔍 Finding available room...');
+      console.log('🔍 Finding available room for type:', form.reservationTypeId);
+      const room = await bookingService.findAvailableRoom(
+        form.reservationTypeId,
+        form.date,
+        form.slotId,
+        rooms
+      );
+
+      if (!room) {
+        console.log('❌ No available room found.');
+        // Dismiss all toasts and show error
+        toast.dismiss();
+        
+        let errorMsg = `No ${form.reservationTypeId} rooms available on ${form.date} at ${form.slotId}.`;
+        toast.error(errorMsg, {
+          duration: 5000,
+          action: {
+            label: 'Dismiss',
+            onClick: () => {},
+          },
+        });
+
+        // Fetch alternatives without blocking
+        bookingService
+          .getSuggestedAlternatives(
+            form.reservationTypeId,
+            form.date,
+            form.slotId,
+            rooms
+          )
+          .then((alternatives) => {
+            if (alternatives.differentTimes.length > 0) {
+              const altMsg = `Try: ${alternatives.differentTimes
+                .map(alt => `${alt.slot} (${alt.roomName})`)
+                .join(', ')}`;
+              toast.info(altMsg, { duration: 4000 });
+            }
+          })
+          .catch((err) => console.error('Error fetching alternatives:', err));
+
+        setSubmitting(false);
+        return;
+      }
+
+      console.log('✅ Room found:', room);
+
+      // Dismiss loading, show creating toast
+      toast.dismiss();
+      toast.loading('📝 Creating your booking...');
+      console.log('📝 Creating booking with roomId:', room.roomId);
+      const booking = await bookingService.createBooking(
+        room.roomId,
+        form.date,
+        form.slotId
+      );
+
+      console.log('🎉 Booking created successfully:', booking);
+      
+      // Dismiss all and show success
+      toast.dismiss();
+      toast.success('✅ Booking created! Check your email for confirmation.', {
+        duration: 4000,
+      });
+      
+      setBookingRef(booking.reference);
+
+    } catch (err) {
+      console.error('❌ Booking error:', err);
+      toast.dismiss();
+      toast.error(err.message || 'Booking failed. Please try again.', {
+        duration: 5000,
+        action: {
+          label: 'Dismiss',
+          onClick: () => {},
+        },
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetFlow = () => {
+    setForm(initialForm);
+    setStep(1);
+    setBookingRef(null);
   const handleSubmitBooking = async () => {
     if (!selectedType) return;
     setSubmitLoading(true);
@@ -599,6 +786,15 @@ export function BookingPage() {
               <ArrowRight className="h-4 w-4" aria-hidden />
             </button>
           ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || loadingRooms}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d35400] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+              {submitting ? "Submitting…" : loadingRooms ? "Loading…" : "Submit booking request"}
+            </button>
             <div className="flex flex-col items-end gap-2">
               {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
               <button

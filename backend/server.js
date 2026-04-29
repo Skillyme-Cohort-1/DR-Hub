@@ -9,6 +9,7 @@ const roomRoutes = require('./src/routes/roomRoutes');
 const bookingRoutes = require('./src/routes/bookingRoutes');
 const paymentRoutes = require('./src/routes/paymentRoute');
 const feedbackRoutes = require('./src/routes/feedback.route');
+const reviewRoutes = require('./src/routes/reviewRoutes');
 const contactRoutes = require('./src/routes/contactRoutes');
 const bookingSlotRoutes = require("./src/routes/slotsRoutes")
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
@@ -34,6 +35,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/slots', bookingSlotRoutes);
 app.use('/api/attendances', attendanceRoutes);
@@ -55,7 +57,7 @@ app.use((error, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on 'http://localhost:${PORT}'`);
 });
 
 module.exports = app;
