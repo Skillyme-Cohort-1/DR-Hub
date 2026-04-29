@@ -13,7 +13,6 @@ const reviewRoutes = require('./src/routes/reviewRoutes');
 const contactRoutes = require('./src/routes/contactRoutes');
 const bookingSlotRoutes = require("./src/routes/slotsRoutes")
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
-const bookingSlotRoutes = require("./src/routes/slotsRoutes");
 const exportRoutes = require('./src/routes/exportRoutes');
 
 const app = express();
