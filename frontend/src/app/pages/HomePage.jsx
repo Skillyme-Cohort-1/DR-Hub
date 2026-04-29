@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,8 +15,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 import RoomsSection from "../components/RoomsSection";
+import { reviewService } from '../../services/reviewApi';
 
-const testimonials = [
+const staticTestimonials = [
   {
     name: "A. Mwangi",
     role: "Advocate, Nairobi",
@@ -41,6 +42,23 @@ const amenityImage =
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80";
 
 export default function HomePage() {
+  const [testimonials, setTestimonials] = useState(staticTestimonials.slice(0, 3));
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await reviewService.getReviews();
+        if (mounted && data?.reviews?.length) {
+          setTestimonials(data.reviews.slice(0, 3));
+        }
+      } catch (err) {
+        console.error("Error fetching testimonials:", err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const steps = [
     {
       number: 1,

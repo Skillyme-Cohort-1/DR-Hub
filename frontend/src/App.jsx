@@ -22,16 +22,17 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/booking" element={<BookingPage />} />
+        <Route path="/dashboard" element={<ClientDashboard />} />
 
         {/* Protected Dashboard Route */}
-        <Route
+        {/* <Route
           path="/dashboard"
           element={
             <PrivateRoute>
               <ClientDashboard />
             </PrivateRoute>
           }
-        />
+        /> */}
       </Routes>
     </BrowserRouter>
   );
