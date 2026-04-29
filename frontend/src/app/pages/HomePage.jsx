@@ -41,6 +41,12 @@ const staticTestimonials = [
 const amenityImage =
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80";
 
+function bookingHref() {
+  return localStorage.getItem("isLoggedIn") === "true"
+    ? "/booking"
+    : "/login?redirect=%2Fbooking";
+}
+
 export default function HomePage() {
   const [testimonials, setTestimonials] = useState(staticTestimonials.slice(0, 3));
 
@@ -117,7 +123,7 @@ export default function HomePage() {
                   asChild
                   className="h-auto rounded-md bg-[#E87722] px-8 py-4 text-base text-white shadow-lg shadow-[#E87722]/20 hover:bg-[#d96d1f]"
                 >
-                  <Link to="/booking" className="inline-flex items-center gap-2">
+                  <Link to={bookingHref()} className="inline-flex items-center gap-2">
                     Book a space
                     <ArrowRight className="h-5 w-5" aria-hidden />
                   </Link>
@@ -161,6 +167,43 @@ export default function HomePage() {
             </div>
 
             <RoomsSection />
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {rooms.map((room) => {
+                const RoomIcon = room.icon;
+                return (
+                  <Card
+                    key={room.name}
+                    className="group overflow-hidden border border-white/10 bg-zinc-900/40 p-0 transition-all duration-300 hover:-translate-y-1 hover:border-[#E87722]/50 hover:shadow-lg hover:shadow-black/40"
+                  >
+                    <div className="relative aspect-[4/3] overflow-hidden">
+                      <img
+                        src={room.image}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    </div>
+                    <CardHeader className="px-6 pt-6">
+                      <CardTitle className="flex items-center gap-3 text-xl text-white">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#E87722]/15 text-[#E87722] ring-1 ring-[#E87722]/25">
+                          <RoomIcon className="h-5 w-5" aria-hidden />
+                        </span>
+                        {room.name}
+                      </CardTitle>
+                      <CardDescription className="text-base text-white/55">{room.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-6 pb-6">
+                      <Button
+                        asChild
+                        className="w-full rounded-md bg-[#E87722] py-6 text-base text-white hover:bg-[#d96d1f]"
+                      >
+                        <Link to={bookingHref()}>Book this room</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -309,7 +352,7 @@ export default function HomePage() {
               asChild
               className="mt-10 h-auto rounded-md bg-black px-8 py-4 text-base text-white hover:bg-black/90"
             >
-              <Link to="/booking" className="inline-flex items-center gap-2">
+              <Link to={bookingHref()} className="inline-flex items-center gap-2">
                 Book now
                 <ChevronRight className="h-5 w-5" aria-hidden />
               </Link>

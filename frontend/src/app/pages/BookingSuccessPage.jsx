@@ -6,7 +6,7 @@ export function BookingSuccessPage() {
   const bookingRef = location.state?.bookingRef;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
+    <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
       <main className="mx-auto flex min-h-screen max-w-lg items-center px-6 py-16 lg:px-8">
         <div className="w-full rounded-2xl border border-[#E67E22]/25 bg-[#E67E22]/5 p-10 text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#E67E22]/20 text-[#E67E22]">

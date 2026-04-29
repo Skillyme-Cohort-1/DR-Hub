@@ -8,23 +8,23 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
-  email        String       @unique
-  role         Role         @default(MEMBER)
+  email        String  @unique
+  role         Role    @default(MEMBER)
   passwordHash String?
-  phoneNumber  String?      @unique
+  phoneNumber  String? @unique
 
-  address      String?
-  city         String?
-  country      String?
-  gender       Gender?
-  occupation   String?
+  address    String?
+  city       String?
+  country    String?
+  gender     Gender?
+  occupation String?
 
-  status       UserStatus   @default(INACTIVE)
+  status UserStatus @default(INACTIVE)
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   activationTokens AccountActivationToken[]
   resetTokens      PasswordResetToken[]
@@ -32,34 +32,37 @@ model User {
   bookings         Booking[]
   payments         Payment[]
   feedbacks        Feedback[]
+  attendances      Attendance[]
 }
 
 model Room {
-  id          String     @id @default(cuid())
-  name        String     @unique
+  id          String  @id @default(cuid())
+  name        String  @unique
   capacity    Int
-  cost        Int        @default(0)
+  cost        Int     @default(0)
   description String?
   imageUrl    String?
-  isActive    Boolean    @default(true)
+  isActive    Boolean @default(true)
 
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  bookings    Booking[]
-  slots       BookSlot[]
+  bookings Booking[]
+  slots    BookSlot[]
 }
 
 model BookSlot {
-  id        String   @id @default(cuid())
-  roomId    String
-  title     String
+  id     String @id @default(cuid())
+  roomId String
+  title  String
 
   slotDate DateTime?
-  booked   Boolean @default(false)
+  booked   Boolean   @default(false)
+  blocked  Boolean   @default(false)
+  fullDay  Boolean   @default(false)
 
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  booking   Booking? // 1:1 slot → booking
+  room    Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  booking Booking? // 1:1 slot → booking
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -69,27 +72,30 @@ model BookSlot {
 }
 
 model Booking {
-  id            String        @id @default(cuid())
-  reference     String        @unique
+  id        String @id @default(cuid())
+  reference String @unique
 
-  userId        String
-  roomId        String
-  slotId        String        @unique // ensures one booking per slot
+  userId String
+  roomId String
+  slotId String @unique // ensures one booking per slot
 
   date          DateTime
-  status        BookingStatus @default(PENDING)
+  status        BookingStatus @default(DRAFT)
   amountCharged Int
+  amountPaid    Int           @default(0)
+  depositPaid   Boolean       @default(false)
   notes         String?
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room          Room          @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  slot          BookSlot      @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  slot BookSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
 
-  payment       Payment?
-  feedback      Feedback?
+  payments    Payment[]
+  feedback    Feedback?
+  attendances Attendance[]
 
   @@index([userId])
   @@index([roomId])
@@ -98,60 +104,79 @@ model Booking {
 }
 
 model Payment {
-  id               String        @id @default(cuid())
-  userId           String
-  bookingId        String        @unique
+  id        String @id @default(cuid())
+  userId    String
+  bookingId String
 
   amount           Int
   currency         String        @default("KES")
   status           PaymentStatus @default(PENDING)
   paymentReference String?       @unique
   paymentLink      String?
+  recordMethod     String?       @default("MANUAL")
+  paymentMethod    String?
+  paymentType      String?
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  booking          Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Attendance {
+  id                String           @id @default(cuid())
+  userId            String
+  bookingId         String
+  status            AttendanceStatus @default(CHECKED_IN)
+  numberOfAttendees Int              @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Feedback {
-  id        String   @id @default(cuid())
-  bookingId String   @unique
+  id        String @id @default(cuid())
+  bookingId String @unique
   userId    String
 
-  rating    Int
-  comment   String?
+  rating  Int
+  comment String?
 
   createdAt DateTime @default(now())
 
-  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model UserDocument {
-  id           String         @id @default(cuid())
-  userId       String
+  id     String @id @default(cuid())
+  userId String
 
   documentName String
   documentFile String
   status       DocumentStatus @default(PENDING)
 
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
+  id        String @id @default(cuid())
+  tokenHash String @unique
   userId    String
 
   expiresAt DateTime
@@ -159,31 +184,31 @@ model PasswordResetToken {
 
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model AccountActivationToken {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
   userId    String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model ContactMessage {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   fullName    String
   email       String
   phoneNumber String?
   message     String
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([email])
@@ -192,6 +217,13 @@ model ContactMessage {
 enum Role {
   ADMIN
   MEMBER
+  NON_MEMBER
+}
+
+enum AttendanceStatus {
+  CHECKED_IN
+  CHECKED_OUT
+  NO_SHOW
 }
 
 enum Gender {
@@ -203,6 +235,8 @@ enum Gender {
 enum UserStatus {
   ACTIVE
   INACTIVE
+  APPROVED
+  DECLINED
 }
 
 enum DocumentStatus {
@@ -218,9 +252,13 @@ enum PaymentStatus {
 }
 
 enum BookingStatus {
+  DRAFT
   PENDING
   CONFIRMED
+  FULLY_PAID
+  REPORTED
   CANCELLED
   COMPLETED
   NO_SHOW
+  CHECKED_IN
 }

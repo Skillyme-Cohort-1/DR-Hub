@@ -196,7 +196,7 @@ async function login(req, res, next) {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    if (user.status !== 'ACTIVE') {
+    if (!['ACTIVE', 'APPROVED'].includes(user.status)) {
       return res.status(403).json({ message: 'Account is inactive. Please activate your account from your email.' });
     }
 

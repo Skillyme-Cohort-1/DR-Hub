@@ -63,353 +63,34 @@ function getStatusBadge(status) {
     </span>
   );
 }
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { useProfile } from "../hooks/useProfile";
+import { useBookings } from "../hooks/useBookings";
+import { usePayments } from "../hooks/usePayments";
+import { useDocuments } from "../hooks/useDocuments";
+import { useCheckins } from "../hooks/useCheckins";
+
+import { DashboardHeader } from "../components/dashboard/DashboardHeader";
+import { DashboardSidebar } from "../components/dashboard/DashboardSidebar";
+import { MetricsSection } from "../components/dashboard/MetricsSection";
+import { BookingsSection } from "../components/dashboard/BookingsSection";
+import { DocumentsSection } from "../components/dashboard/DocumentsSection";
+import { CheckinsSection } from "../components/dashboard/CheckinsSection";
+import { PaymentsSection } from "../components/dashboard/PaymentsSection";
+import { ProfileSection } from "../components/dashboard/ProfileSection";
 
 export function ClientDashboard() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("metrics");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [documents, setDocuments] = useState([]);
-  const [documentsLoading, setDocumentsLoading] = useState(true);
-  const [documentsError, setDocumentsError] = useState("");
-  const [documentName, setDocumentName] = useState("");
-  const [documentFile, setDocumentFile] = useState(null);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    id: "",
-    name: "",
-    email: "",
-    phoneNumber: "",
-    gender: "",
-    address: "",
-    city: "",
-    country: "",
-    occupation: "",
-    status: "",
-    role: "",
-    createdAt: "",
-    updatedAt: "",
-  });
 
-  useEffect(() => {
-    fetchUserProfile();
-    fetchDocuments();
-  }, []);
-
-  const getStoredAccessToken = () => {
-    const directToken =
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("accessToken") ||
-      localStorage.getItem("token");
-
-    if (directToken) return directToken;
-
-    const jsonTokenSources = ["auth", "session", "userSession"];
-    for (const key of jsonTokenSources) {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-
-      try {
-        const parsed = JSON.parse(raw);
-        const nestedToken =
-          parsed?.accessToken ||
-          parsed?.token ||
-          parsed?.authToken ||
-          parsed?.data?.accessToken ||
-          parsed?.data?.token;
-
-        if (nestedToken) return nestedToken;
-      } catch {
-        // ignore malformed JSON storage and continue trying other keys
-      }
-    }
-
-    return "";
-  };
-
-  const fetchUserProfile = async () => {
-    setProfileLoading(true);
-    try {
-      const token = getStoredAccessToken();
-
-      if (!token) {
-        console.warn("No auth token found. Using mock data.");
-        setProfileForm({
-          id: "mock-id",
-          name: "John Doe",
-          email: "john.doe@example.com",
-          phoneNumber: "+254745491094",
-          gender: "MALE",
-          address: "",
-          city: "",
-          country: "",
-          occupation: "Divorce Lawyer",
-          status: "ACTIVE",
-          role: "MEMBER",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        setProfileLoading(false);
-        return;
-      }
-
-      const response = await fetch("http://localhost:3000/api/users/profile", {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch profile");
-      }
-
-      const data = await response.json();
-      if (data.user) {
-        setProfileForm({
-          id: data.user.id || "",
-          name: data.user.name || "",
-          email: data.user.email || "",
-          phoneNumber: data.user.phoneNumber || "",
-          gender: data.user.gender || "",
-          address: data.user.address || "",
-          city: data.user.city || "",
-          country: data.user.country || "",
-          occupation: data.user.occupation || "",
-          status: data.user.status || "",
-          role: data.user.role || "",
-          createdAt: data.user.createdAt || "",
-          updatedAt: data.user.updatedAt || "",
-        });
-      } else {
-        setProfileForm({
-          id: "no-user-payload",
-          name: "User",
-          email: "",
-          phoneNumber: "",
-          gender: "",
-          address: "",
-          city: "",
-          country: "",
-          occupation: "",
-          status: "ACTIVE",
-          role: "MEMBER",
-          createdAt: "",
-          updatedAt: "",
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      setProfileForm({
-        id: "error-id",
-        name: "User",
-        email: "",
-        phoneNumber: "",
-        gender: "",
-        address: "",
-        city: "",
-        country: "",
-        occupation: "",
-        status: "ACTIVE",
-        role: "MEMBER",
-        createdAt: "",
-        updatedAt: "",
-      });
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const fetchDocuments = async () => {
-    setDocumentsLoading(true);
-    setDocumentsError("");
-    try {
-      const token = getStoredAccessToken();
-      if (!token) {
-        setDocuments([]);
-        setDocumentsError("No access token found. Please sign in again.");
-        return;
-      }
-
-      const response = await fetch("http://localhost:3000/api/documents", {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to fetch documents");
-      }
-
-      const data = await response.json();
-      setDocuments(Array.isArray(data.documents) ? data.documents : []);
-    } catch (error) {
-      setDocuments([]);
-      setDocumentsError("Could not load documents.");
-      console.error("Error fetching documents:", error);
-    } finally {
-      setDocumentsLoading(false);
-    }
-  };
-
-  const handleUploadDocument = async (event) => {
-    event.preventDefault();
-    setDocumentsError("");
-
-    if (!documentFile) {
-      setDocumentsError("Please select a file to upload.");
-      return;
-    }
-
-    const token = getStoredAccessToken();
-    if (!token) {
-      setDocumentsError("No access token found. Please sign in again.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("documentName", (documentName || documentFile.name).trim());
-    formData.append("document", documentFile);
-
-    setUploadingDocument(true);
-    try {
-      const response = await fetch("http://localhost:3000/api/documents", {
-        method: "POST",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to upload document");
-      }
-
-      setDocumentName("");
-      setDocumentFile(null);
-      await fetchDocuments();
-    } catch (error) {
-      setDocumentsError("Upload failed. Please try again.");
-      console.error("Error uploading document:", error);
-    } finally {
-      setUploadingDocument(false);
-    }
-  };
-
-  const handleDeleteDocument = async (documentId) => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setDocumentsError("No access token found. Please sign in again.");
-      return;
-    }
-
-    try {
-      const response = await fetch(`http://localhost:3000/api/documents/${documentId}`, {
-        method: "DELETE",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to delete document");
-      }
-
-      await fetchDocuments();
-    } catch (error) {
-      setDocumentsError("Delete failed. Please try again.");
-      console.error("Error deleting document:", error);
-    }
-  };
-
-  const handleDownloadDocument = async (documentItem) => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setDocumentsError("No access token found. Please sign in again.");
-      return;
-    }
-
-    try {
-      const response = await fetch(documentItem.downloadUrl, {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to download document");
-      }
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = documentItem.documentName || "document";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
-    } catch (error) {
-      setDocumentsError("Download failed. Please try again.");
-      console.error("Error downloading document:", error);
-    }
-  };
-
-  const handleViewDocument = async (documentItem) => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setDocumentsError("No access token found. Please sign in again.");
-      return;
-    }
-
-    try {
-      const response = await fetch(documentItem.downloadUrl, {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to open document");
-      }
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-    } catch (error) {
-      setDocumentsError("Could not open this document.");
-      console.error("Error viewing document:", error);
-    }
-  };
-
-  const sections = [
-    { id: "metrics", label: "Metrics", icon: LayoutDashboard },
-    { id: "bookings", label: "Bookings", icon: Calendar },
-    { id: "documents", label: "Documents", icon: FileText },
-    { id: "checkins", label: "Check-ins", icon: CheckCircle },
-    { id: "payments", label: "Payments", icon: CreditCard },
-    { id: "profile", label: "Profile", icon: UserCircle2 },
-  ];
-
-  const selectSection = (sectionId) => {
-    setActiveSection(sectionId);
-    setSidebarOpen(false);
-  };
+  const { profileForm, profileLoading, updateField } = useProfile();
+  const { myBookings, bookingsLoading, bookingsError, upcomingBookings, stats } = useBookings();
+  const { myPayments, paymentsLoading, paymentsError } = usePayments();
+  const docs = useDocuments();
+  const { checkins, checkinsLoading, checkinsError } = useCheckins();
 
   const handleLogout = () => {
     localStorage.removeItem("isLoggedIn");
@@ -1058,27 +739,74 @@ export function ClientDashboard() {
               </button>
             </div>
           </div>
+  const handlePayDeposit = (booking) => {
+    const role = (profileForm.role || "").toUpperCase();
+    const bookingFee = role === "MEMBER" ? 1000 : 2000;
+    navigate("/booking/pay", {
+      state: {
+        booking,
+        bookingFee,
+        defaultPhone: profileForm.phoneNumber || "",
+        reservationTypeName: booking?.room?.name || "Room booking",
+      },
+    });
+  };
 
-          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#0F0F0F] to-[#0A0A0A] p-6">
-            <h3 className="mb-4 text-lg font-semibold text-white">Upcoming Sessions</h3>
-            <div className="space-y-3">
-              {upcomingBookings.slice(0, 2).map((booking) => (
-                <div key={booking.id} className="rounded-lg bg-white/5 p-4">
-                  <div className="mb-2 flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-white">{booking.room}</p>
-                      <p className="text-xs text-white/50">{booking.date}</p>
-                    </div>
-                    {getStatusBadge(booking.status)}
-                  </div>
-                  <p className="text-xs text-white/70">{booking.time}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-    );
+  const sectionContent = {
+    metrics: (
+      <MetricsSection
+        stats={stats}
+        upcomingBookings={upcomingBookings}
+        bookingsLoading={bookingsLoading}
+        bookingsError={bookingsError}
+        onNavigateSection={setActiveSection}
+      />
+    ),
+    bookings: (
+      <BookingsSection
+        bookings={myBookings}
+        loading={bookingsLoading}
+        error={bookingsError}
+        onPayDeposit={handlePayDeposit}
+      />
+    ),
+    documents: (
+      <DocumentsSection
+        documents={docs.documents}
+        documentsLoading={docs.documentsLoading}
+        documentsError={docs.documentsError}
+        documentName={docs.documentName}
+        setDocumentName={docs.setDocumentName}
+        documentFile={docs.documentFile}
+        setDocumentFile={docs.setDocumentFile}
+        uploadingDocument={docs.uploadingDocument}
+        onUpload={docs.handleUploadDocument}
+        onDelete={docs.handleDeleteDocument}
+        onDownload={docs.handleDownloadDocument}
+        onView={docs.handleViewDocument}
+      />
+    ),
+    checkins: (
+      <CheckinsSection
+        checkins={checkins}
+        loading={checkinsLoading}
+        error={checkinsError}
+      />
+    ),
+    payments: (
+      <PaymentsSection
+        payments={myPayments}
+        loading={paymentsLoading}
+        error={paymentsError}
+      />
+    ),
+    profile: (
+      <ProfileSection
+        profileForm={profileForm}
+        profileLoading={profileLoading}
+        onUpdateField={updateField}
+      />
+    ),
   };
 
             {/* Right rail: Reviews (visible on all screens, flows below on mobile) */}
@@ -1088,91 +816,23 @@ export function ClientDashboard() {
               </div>
             </div>
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0D0D0D]/95 backdrop-blur-lg">
-        <div className="flex h-16 items-center justify-between px-4 md:px-6">
-          <div className="flex items-center gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-10 w-10 p-0 text-white hover:bg-white/10 lg:hidden"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg font-bold text-white">DR Hub</h1>
-              <p className="text-xs text-white/50">Client Portal</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="text-right">
-                <p className="text-sm font-medium text-white">{profileForm.name || "User"}</p>
-                <p className="text-xs text-white/50">{profileForm.occupation || profileForm.role}</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#E87722] to-[#d46a1a] text-sm font-bold text-white shadow-lg">
-                {profileForm.name ? profileForm.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "U"}
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#0F1A2E]">
+      <DashboardHeader
+        profileForm={profileForm}
+        onLogout={handleLogout}
+        onToggleSidebar={() => setSidebarOpen(true)}
+      />
 
       <div className="flex">
-        <aside
-          className={`fixed inset-y-0 left-0 top-16 z-40 w-72 border-r border-white/10 bg-[#0D0D0D] transition-transform duration-300 lg:static lg:translate-x-0 ${
-            sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="h-[calc(100vh-4rem)] overflow-y-auto p-4">
-            <nav className="space-y-1">
-              {sections.map((section) => {
-                const Icon = section.icon;
-                const active = activeSection === section.id;
-                return (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => selectSection(section.id)}
-                    className={`group relative flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all ${
-                      active
-                        ? "bg-gradient-to-r from-[#E87722]/20 to-[#E87722]/10 text-white shadow-lg shadow-[#E87722]/10"
-                        : "text-white/70 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#E87722]" />
-                    )}
-                    <Icon className={`h-5 w-5 transition-transform ${active ? "text-[#E87722]" : "group-hover:scale-110"}`} />
-                    <span>{section.label}</span>
-                    {active && <ChevronRight className="ml-auto h-4 w-4 text-[#E87722]" />}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
-
-        {sidebarOpen && (
-          <button
-            type="button"
-            className="fixed inset-0 top-16 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close menu overlay"
-          />
-        )}
+        <DashboardSidebar
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
 
         <main className="min-w-0 flex-1 p-4 md:p-6">
-          {renderContent()}
+          {sectionContent[activeSection]}
         </main>
       </div>
     </div>

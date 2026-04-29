@@ -116,7 +116,10 @@ async function createBooking(req, res, next) {
             return res.status(400).json({ message: 'Validation failed.', errors });
         }
 
-        const booking = await bookingService.createBooking(data);
+        const booking = await bookingService.createBooking({
+            ...data,
+            userId: req.authUser.id
+        });
 
         return res.status(201).json({
             message: 'Booking created successfully.',
@@ -132,11 +135,26 @@ async function createBooking(req, res, next) {
         if (error.message === 'SLOT_UNAVAILABLE') {
             return res.status(409).json({ message: 'This slot is already booked.' });
         }
+        if (error.message === 'SLOT_NOT_FOUND') {
+            return res.status(404).json({ message: 'Slot not found for this room.' });
+        }
+        if (error.message === 'SLOT_DATE_MISMATCH') {
+            return res.status(400).json({ message: 'Selected slot does not belong to the provided booking date.' });
+        }
+        if (error.message === 'SLOT_BLOCKED') {
+            return res.status(400).json({ message: 'Selected slot is currently blocked.' });
+        }
         if (error.message === 'USER_NOT_ACTIVE') {
             return res.status(403).json({ message: 'Your account is not active. Please contact support.' });
         }
+        if (error.message === 'USER_NOT_FOUND') {
+            return res.status(404).json({ message: 'User not found.' });
+        }
         if (error.message === 'NO_APPROVED_DOCUMENT') {
             return res.status(403).json({ message: 'You must have an approved qualification document before booking.' });
+        }
+        if (error.message === 'INVALID_TOTAL_COST') {
+            return res.status(400).json({ message: 'Provided totalCost does not match the room cost.' });
         }
         if (error.message === 'ROOM_COST_NOT_SET') {
             return res.status(400).json({ message: 'This room does not have a price set. Please contact support.' });

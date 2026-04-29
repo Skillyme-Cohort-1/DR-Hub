@@ -8,8 +8,6 @@ import {
   Calendar,
   Check,
   Clock,
-  Coffee,
-  FileVideo,
   Layers,
   Loader2,
   MapPin,
@@ -26,7 +24,7 @@ const STEPS = [
   { id: 1, label: "Reservation type" },
   { id: 2, label: "Date & time" },
   { id: 3, label: "Your details" },
-  { id: 4, label: "Add-ons" },
+  { id: 4, label: "Confirm booking" },
 ];
 
 const RESERVATION_TYPES = [
@@ -67,37 +65,6 @@ const TIME_SLOTS = [
   { id: "evening", label: "Evening", range: "18:00 – 20:00" },
 ];
 
-const ADD_ONS = [
-  {
-    id: "catering",
-    label: "Catering",
-    description: "Light meals or refreshments arranged for your session.",
-    price: "From Ksh 2,500",
-    icon: Coffee,
-  },
-  {
-    id: "av_extra",
-    label: "Extra AV support",
-    description: "On-site help with displays, conferencing, and recordings.",
-    price: "From Ksh 1,500",
-    icon: FileVideo,
-  },
-  {
-    id: "parking",
-    label: "Reserved parking",
-    description: "Dedicated bay for the duration of your booking.",
-    price: "Ksh 500",
-    icon: ParkingCircle,
-  },
-  {
-    id: "printing",
-    label: "Printing & binding",
-    description: "High-volume print and same-day binding for bundles.",
-    price: "Quoted on use",
-    icon: Printer,
-  },
-];
-
 const initialForm = {
   reservationTypeId: "",
   date: "",
@@ -105,11 +72,7 @@ const initialForm = {
   fullName: "",
   email: "",
   phone: "",
-  organization: "",
   attendees: 1,
-  addOnIds: [],
-  notes: "",
-  documents: [],
 };
 
 const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -131,13 +94,13 @@ function phoneOk(phone) {
   return digits.length >= 9 && digits.length <= 15;
 }
 
-function readFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-    reader.readAsDataURL(file);
-  });
+function getAuthUser() {
+  try {
+    const raw = localStorage.getItem("authUser");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function BookingPage() {
@@ -151,12 +114,25 @@ export function BookingPage() {
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [submitError, setSubmitError] = useState("");
+  const [form, setForm] = useState(() => {
+    const user = getAuthUser();
+    return {
+      ...initialForm,
+      fullName: user?.fullName || user?.name || "",
+      email: user?.email || "",
+      phone: user?.phoneNumber || user?.phone || "",
+    };
+  });
   const [reservationTypes, setReservationTypes] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState("");
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState("");
+
+  const authUser = getAuthUser();
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const minDate = useMemo(() => todayISODate(), []);
 
@@ -321,6 +297,7 @@ export function BookingPage() {
       documents: prev.documents.map((doc, index) => (index === indexToUpdate ? { ...doc, name } : doc)),
     }));
   };
+  const userDetailsAreAutofilled = Boolean(authUser);
 
   const canGoNext = () => {
     if (step === 1) return Boolean(form.reservationTypeId);
@@ -334,6 +311,7 @@ export function BookingPage() {
         form.attendees <= maxAttendees
       );
     }
+    if (step === 4) return true;
     return true;
   };
 
@@ -451,14 +429,22 @@ export function BookingPage() {
     setForm(initialForm);
     setStep(1);
     setBookingRef(null);
+  const handleSubmitBooking = async () => {
+    if (!selectedType) return;
+    setSubmitLoading(true);
     setSubmitError("");
     try {
-      const response = await fetch(`${API_BASE}/api/bookings/non-user`, {
+      const token = localStorage.getItem("authToken") || "";
+      const headers = {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      // 1. Create booking
+      const bookingRes = await fetch(`${API_BASE}/api/bookings`, {
         method: "POST",
-        headers: {
-          Accept: "*/*",
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           roomId: form.reservationTypeId,
           slotId: form.slotId,
@@ -468,37 +454,25 @@ export function BookingPage() {
           email: form.email.trim(),
           phoneNumber: form.phone.trim(),
           numberOfAttendees: form.attendees,
-          documents: form.documents,
         }),
       });
-
-      const responseText = await response.text();
-      let payload = null;
-      try {
-        payload = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        payload = null;
-      }
-      if (!response.ok) {
-        throw new Error(payload?.message || responseText || "Unable to submit your booking at the moment.");
+      const bookingText = await bookingRes.text();
+      let bookingPayload = null;
+      try { bookingPayload = bookingText ? JSON.parse(bookingText) : null; } catch { bookingPayload = null; }
+      if (!bookingRes.ok) {
+        throw new Error(bookingPayload?.message || "Unable to create your booking. Please try again.");
       }
 
-      const ref = payload?.data?.reference || payload?.data?.id || `DRH-${Date.now().toString(36).toUpperCase()}`;
-      navigate("/booking/success", {
-        replace: true,
-        state: {
-          bookingRef: ref,
-        },
-      });
+      navigate("/dashboard", { replace: true });
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unable to submit your booking at the moment.");
+      setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
-      setSubmitting(false);
+      setSubmitLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white antialiased">
+    <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
       <BookingHeader />
 
       <main className="mx-auto max-w-3xl px-6 pb-20 pt-28 lg:max-w-4xl lg:px-8 lg:pt-32">
@@ -594,7 +568,7 @@ export function BookingPage() {
                 min={minDate}
                 value={form.date}
                 onChange={(e) => update({ date: e.target.value })}
-                className="w-full max-w-xs rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                className="w-full max-w-xs rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
               />
             </div>
 
@@ -658,7 +632,9 @@ export function BookingPage() {
                   autoComplete="name"
                   value={form.fullName}
                   onChange={(e) => update({ fullName: e.target.value })}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  disabled={userDetailsAreAutofilled}
+                  readOnly={userDetailsAreAutofilled}
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="Name as it should appear on the booking"
                 />
               </div>
@@ -672,7 +648,9 @@ export function BookingPage() {
                   autoComplete="email"
                   value={form.email}
                   onChange={(e) => update({ email: e.target.value })}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  disabled={userDetailsAreAutofilled}
+                  readOnly={userDetailsAreAutofilled}
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="you@example.com"
                 />
               </div>
@@ -686,21 +664,10 @@ export function BookingPage() {
                   autoComplete="tel"
                   value={form.phone}
                   onChange={(e) => update({ phone: e.target.value })}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  disabled={userDetailsAreAutofilled}
+                  readOnly={userDetailsAreAutofilled}
+                  className="w-full rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                   placeholder="+254 …"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label htmlFor="booker-org" className="mb-2 block text-sm font-medium text-white/80">
-                  Organization <span className="font-normal text-white/40">(optional)</span>
-                </label>
-                <input
-                  id="booker-org"
-                  type="text"
-                  value={form.organization}
-                  onChange={(e) => update({ organization: e.target.value })}
-                  className="w-full rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
-                  placeholder="Chambers or firm name"
                 />
               </div>
               <div className="sm:col-span-2">
@@ -715,121 +682,12 @@ export function BookingPage() {
                   max={maxAttendees}
                   value={form.attendees}
                   onChange={(e) => update({ attendees: Math.max(1, Math.min(maxAttendees, Number(e.target.value) || 1)) })}
-                  className="w-full max-w-[200px] rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
+                  className="w-full max-w-[200px] rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
                 />
                 <p className="mt-2 text-xs text-white/45">
                   Maximum {maxAttendees} for this reservation type.
                 </p>
               </div>
-            </div>
-          </section>
-        )}
-
-        {step === 4 && (
-          <section aria-labelledby="step4-title">
-            <h1 id="step4-title" className="mb-2 text-3xl font-semibold text-white" style={{ fontFamily: "var(--font-display)" }}>
-              Optional add-ons
-            </h1>
-            <p className="mb-8 text-white/55">Enhance your session — select any that apply. Final pricing is confirmed with you.</p>
-
-            <div className="space-y-3">
-              {ADD_ONS.map((addon) => {
-                const Icon = addon.icon;
-                const on = form.addOnIds.includes(addon.id);
-                return (
-                  <button
-                    key={addon.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleAddOn(addon.id)}
-                    className={`flex w-full items-start gap-4 rounded-xl border p-5 text-left transition-all ${
-                      on ? "border-[#E67E22] bg-[#E67E22]/10" : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                    }`}
-                  >
-                    <span
-                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${
-                        on ? "border-[#E67E22] bg-[#E67E22] text-white" : "border-white/25 bg-transparent"
-                      }`}
-                      aria-hidden
-                    >
-                      {on ? <Check className="h-4 w-4" /> : null}
-                    </span>
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#E67E22]/10 text-[#E67E22]">
-                      <Icon className="h-5 w-5" aria-hidden />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-semibold text-white">{addon.label}</span>
-                        <span className="text-sm text-[#E67E22]">{addon.price}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-white/50">{addon.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-8">
-              <label htmlFor="booking-notes" className="mb-2 block text-sm font-medium text-white/80">
-                Special requests <span className="font-normal text-white/40">(optional)</span>
-              </label>
-              <textarea
-                id="booking-notes"
-                rows={3}
-                value={form.notes}
-                onChange={(e) => update({ notes: e.target.value })}
-                className="w-full resize-y rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
-                placeholder="Dietary needs, accessibility, bundle pages, etc."
-              />
-            </div>
-
-            <div className="mt-8">
-              <label htmlFor="booking-documents" className="mb-2 block text-sm font-medium text-white/80">
-                Documents <span className="font-normal text-white/40">(optional, multiple allowed)</span>
-              </label>
-              <input
-                id="booking-documents"
-                type="file"
-                multiple
-                onChange={handleDocumentsChange}
-                className="block w-full cursor-pointer rounded-lg border border-white/10 bg-[#141414] px-4 py-3 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#E67E22] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#d35400]"
-              />
-              {form.documents.length ? (
-                <ul className="mt-3 space-y-2">
-                  {form.documents.map((doc, index) => (
-                    <li
-                      key={`${doc.fileName}-${index}`}
-                      className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-3 text-sm"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="min-w-0 truncate text-white/80">{doc.fileName}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeDocument(index)}
-                          className="shrink-0 text-xs font-medium text-red-300 hover:text-red-200"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <div className="mt-2">
-                        <label htmlFor={`document-name-${index}`} className="mb-1 block text-xs text-white/60">
-                          Document name
-                        </label>
-                        <input
-                          id={`document-name-${index}`}
-                          type="text"
-                          value={doc.name}
-                          onChange={(e) => updateDocumentName(index, e.target.value)}
-                          placeholder="Enter a name for this document"
-                          className="w-full rounded-lg border border-white/10 bg-[#141414] px-3 py-2 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-xs text-white/45">No documents selected.</p>
-              )}
             </div>
 
             {/* Summary */}
@@ -854,22 +712,56 @@ export function BookingPage() {
                   <dt>Attendees</dt>
                   <dd className="text-right text-white">{form.attendees}</dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Add-ons</dt>
-                  <dd className="text-right text-white">
-                    {form.addOnIds.length ? `${form.addOnIds.length} selected` : "None"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt>Documents</dt>
-                  <dd className="text-right text-white">
-                    {form.documents.length ? `${form.documents.length} attached` : "None"}
-                  </dd>
-                </div>
               </dl>
             </div>
           </section>
         )}
+
+        {step === 4 && (
+          <section aria-labelledby="step4-title">
+            <h1 id="step4-title" className="mb-2 text-3xl font-semibold text-white" style={{ fontFamily: "var(--font-display)" }}>
+              Confirm booking details
+            </h1>
+            <p className="mb-8 text-white/55">Review details below, then submit your booking.</p>
+
+            <div className="rounded-2xl border border-[#E67E22]/30 bg-[#E67E22]/5 p-6">
+              <dl className="space-y-3 text-sm text-white/75">
+                <div className="flex justify-between gap-4">
+                  <dt>Reservation type</dt>
+                  <dd className="text-right text-white">{selectedType?.title || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Date</dt>
+                  <dd className="text-right text-white">{form.date || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Time slot</dt>
+                  <dd className="text-right text-white">{slots.find((s) => s.id === form.slotId)?.title || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Booked by</dt>
+                  <dd className="text-right text-white">{form.fullName}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Email</dt>
+                  <dd className="text-right text-white">{form.email}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Phone</dt>
+                  <dd className="text-right text-white">{form.phone}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Attendees</dt>
+                  <dd className="text-right text-white">{form.attendees}</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-white/50">
+              After submission, you will be redirected to the booking fee payment page.
+            </div>
+          </section>
+        )}
+
 
         {/* Nav buttons */}
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8">
@@ -907,11 +799,11 @@ export function BookingPage() {
               {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
               <button
                 type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
+                onClick={handleSubmitBooking}
+                disabled={submitLoading || !canGoNext()}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d35400] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? "Submitting…" : "Submit booking request"}
+                {submitLoading ? "Submitting…" : "Submit booking"}
               </button>
             </div>
           )}
@@ -923,7 +815,7 @@ export function BookingPage() {
 
 function BookingHeader() {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0F1A2E]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6 lg:px-8">
         <Link
           to="/"
@@ -939,8 +831,8 @@ function BookingHeader() {
         >
           DR Hub
         </Link>
-        <Link to="/login" className="text-sm font-medium text-white/70 hover:text-white">
-          Login
+        <Link to="/dashboard" className="text-sm font-medium text-white/70 hover:text-white">
+          Dashboard
         </Link>
       </div>
     </header>
