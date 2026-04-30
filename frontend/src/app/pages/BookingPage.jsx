@@ -194,7 +194,7 @@ export function BookingPage() {
         if (!mounted) return;
         const matchingSlots = payload.data.filter((slot) => {
           const slotDate = new Date(slot.slotDate).toISOString().slice(0, 10);
-          return slotDate === selectedDate && slot.booked === false;
+          return slotDate === selectedDate && !slot.booked && !slot.blocked;
         });
         setSlots(matchingSlots);
       } catch {
@@ -276,7 +276,21 @@ export function BookingPage() {
         throw new Error(bookingPayload?.message || "Unable to create your booking. Please try again.");
       }
 
-      navigate("/dashboard", { replace: true });
+      const createdBooking = bookingPayload?.data || bookingPayload?.booking || {};
+      const selectedSlot = slots.find((s) => s.id === form.slotId);
+      navigate("/booking/pay", {
+        replace: true,
+        state: {
+          booking: {
+            ...createdBooking,
+            room: selectedType,
+            date: form.date,
+          },
+          reservationTypeName: selectedType?.title,
+          slotTitle: selectedSlot?.title || "Selected slot",
+          bookingFee: selectedType?.cost,
+        },
+      });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {

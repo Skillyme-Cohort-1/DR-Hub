@@ -1,19 +1,76 @@
-[{
-    "roomId": "jsjsjsjjakakak",
-    "slotId": "jjakakakajaka",
-    "bookingDate": "2026-04-23",
-    "totalCost": 7000,
-    "fullName": "John Doe",
-    "email": "johndoe@gmail.com",
-    "phoneNumber": "+254745491093",
-    "numberOfAttendees": 5
-},
-{
-    "roomId": "jsjsjsjjakakak",
-    "slotId": "jjakakakajaka",
-    "userId": "tywuiii291991",
-    "bookingDate": "2026-04-23",
-    "totalCost": 7000,
-    "numberOfAttendees": 5
+
+1. Sample Request to fetch a booking by ID:
+let headersList = {
+ "Accept": "*/*",
+ "Authorization": "Bearer <token>"
 }
-]
+
+let response = await fetch("http://localhost:3000/api/bookings/cmoj6t9mr0001vojosa7d1gsk", { 
+  method: "GET",
+  headers: headersList
+});
+
+let data = await response.text();
+console.log(data);
+
+
+
+2. Sample Response for fetching a booking by ID:
+{
+  "message": "Booking fetched successfully.",
+  "booking": {
+    "id": "cmoj6t9mr0001vojosa7d1gsk",
+    "reference": "DRH-20260429-M47T",
+    "userId": "cmohgqe700003vorsz8vdpy05",
+    "roomId": "cmohgufz30006vors330g4qu7",
+    "slotId": "cmohh40gw001ivorspih1m07o",
+    "date": "2026-04-29T00:00:00.000Z",
+    "status": "CHECKED_IN",
+    "amountCharged": 3000,
+    "amountPaid": 3000,
+    "depositPaid": true,
+    "notes": "Admin booking for user John Doe. Attendees: 1",
+    "createdAt": "2026-04-28T22:18:06.722Z",
+    "updatedAt": "2026-04-28T22:27:21.433Z",
+    "room": {
+      "id": "cmohgufz30006vors330g4qu7",
+      "name": "Private Office 1"
+    },
+    "user": {
+      "id": "cmohgqe700003vorsz8vdpy05",
+      "name": "John Doe",
+      "email": "paulkadabo+2@gmail.com",
+      "role": "MEMBER"
+    },
+    "payments": [
+      {
+        "id": "cmoj6v5wk0003vojoc81t2nbn",
+        "status": "COMPLETED",
+        "paymentReference": "PMT-20260429-CJ48",
+        "paymentType": "Deposit",
+        "createdAt": "2026-04-28T22:19:35.204Z",
+        "recordMethod": "MANUAL",
+        "paymentMethod": "KCB Pay Bill",
+        "amount": 1000
+      },
+      {
+        "id": "cmoj6vdsa0005vojo0dx169jx",
+        "status": "COMPLETED",
+        "paymentReference": "PMT-20260429-0Y6B",
+        "paymentType": "BalancePayment",
+        "createdAt": "2026-04-28T22:19:45.418Z",
+        "recordMethod": "MANUAL",
+        "paymentMethod": "KCB Pay Bill",
+        "amount": 2000
+      }
+    ],
+    "slot": {
+      "id": "cmohh40gw001ivorspih1m07o",
+      "title": "7am - 11am",
+      "slotDate": "2026-04-29T00:00:00.000Z",
+      "booked": true,
+      "blocked": false,
+      "fullDay": false
+    }
+  }
+}
