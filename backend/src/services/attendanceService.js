@@ -93,21 +93,21 @@ async function createMemberCheckin({bookingId, numberOfAttendees}) {
 }
 
 
-async function createMemberCheckOut({checkInId}) {
+async function createMemberCheckOut({bookingId}) {
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+    });
+    if (!booking) throw new Error('BOOKING_NOT_FOUND');
+
+
     const attendance = await prisma.attendance.findUnique({
-        where: { id: checkInId },
+        where: { bookingId: bookingId },
         include: {
             booking: { select: { id: true, reference: true, date: true, status: true } },
             user: { select: { id: true, name: true, email: true } },
         }
     });
     if (!attendance) throw new Error('ATTENDANCE_NOT_FOUND');
-
-
-    const booking = await prisma.booking.findUnique({
-        where: { id: attendance.bookingId },
-    });
-    if (!booking) throw new Error('BOOKING_NOT_FOUND');
     
     const user = await prisma.user.findUnique({
         where: { id: attendance.userId },
@@ -120,7 +120,7 @@ async function createMemberCheckOut({checkInId}) {
     try {
         newAttendance = await prisma.$transaction(async (tx) => {
             const updatedAttendance = await tx.attendance.update({
-                where: { id: checkInId },
+                where: { id: attendance.id },
                 data: { checkOutTime: new Date() },
                 include: {
                     booking: { select: { id: true, reference: true, date: true, status: true } },

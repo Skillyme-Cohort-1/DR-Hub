@@ -389,8 +389,9 @@ async function updateBookingStatus(req, res, next) {
         const { id } = req.params;
         const { status } = req.body;
 
-        const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'];
-        if (!status || !allowedStatuses.includes(status)) {
+        const allowedStatuses = bookingService.BOOKING_STATUSES;
+        const normalizedStatus = bookingService.normalizeBookingStatus(status);
+        if (!normalizedStatus || !allowedStatuses.includes(normalizedStatus)) {
             return res.status(400).json({
                 message: `status must be one of: ${allowedStatuses.join(', ')}`
             });
@@ -403,7 +404,7 @@ async function updateBookingStatus(req, res, next) {
 
         const booking = await bookingService.updateBookingStatus({
             bookingId: id,
-            status,
+            status: normalizedStatus,
             updatedBy: req.authUser.id
         });
 
@@ -412,6 +413,14 @@ async function updateBookingStatus(req, res, next) {
             booking
         });
     } catch (error) {
+        if (error.message === 'BOOKING_NOT_FOUND') {
+            return res.status(404).json({ message: 'Booking not found.' });
+        }
+        if (error.message === 'INVALID_BOOKING_STATUS') {
+            return res.status(400).json({
+                message: `status must be one of: ${bookingService.BOOKING_STATUSES.join(', ')}`
+            });
+        }
         if (error.message === 'INVALID_STATUS_TRANSITION') {
             return res.status(400).json({ message: 'This status transition is not allowed.' });
         }

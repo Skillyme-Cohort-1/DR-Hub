@@ -73,10 +73,18 @@ export function BookingsSection({ bookings, loading, error, onPayDeposit }) {
                       >
                         Pay Deposit
                       </button>
-                    ) : (
-                      <button className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
-                        View Details
+                    ) : booking.status === "PENDING" || booking.status === "CONFIRMED" ? (
+                      <button
+                        type="button"
+                        onClick={() => onPayDeposit(booking)}
+                        className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]"
+                      >
+                        Make Payment
                       </button>
+                    ) : (
+                      <Link to={`/booking/${booking.id}`} className="text-sm font-medium text-[#E87722] transition-colors hover:text-[#f39c4d]">
+                        View Details
+                      </Link>
                     )}
                   </td>
                 </tr>

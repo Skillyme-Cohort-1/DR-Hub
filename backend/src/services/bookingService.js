@@ -18,12 +18,34 @@ function getActivationUrl(rawToken) {
 }
 
 const ALLOWED_STATUS_TRANSITIONS = {
-    PENDING:   ['CONFIRMED', 'CANCELLED'],
-    CONFIRMED: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+    DRAFT:     ['PENDING', 'CONFIRMED', 'CANCELLED', 'DECLINED'],
+    PENDING:   ['CONFIRMED', 'CANCELLED', 'DECLINED'],
+    CONFIRMED: ['FULLY_PAID', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'DECLINED'],
+    FULLY_PAID: ['CHECKED_IN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'],
+    CHECKED_IN: ['COMPLETED', 'NO_SHOW'],
+    REPORTED: ['COMPLETED', 'CANCELLED'],
     COMPLETED: [],
     CANCELLED: [],
-    NO_SHOW:   []
+    NO_SHOW:   [],
+    DECLINED:  []
 };
+
+const BOOKING_STATUSES = Object.freeze(Object.keys(ALLOWED_STATUS_TRANSITIONS));
+const STATUS_ALIASES = Object.freeze({
+    APPROVED: 'CONFIRMED',
+    REJECTED: 'DECLINED'
+});
+const ACTIVE_SLOT_STATUSES = ['DRAFT', 'PENDING', 'CONFIRMED', 'FULLY_PAID', 'REPORTED', 'CHECKED_IN'];
+
+function normalizeBookingStatus(status) {
+    if (typeof status !== 'string') return null;
+    const normalized = status.trim().toUpperCase();
+    return STATUS_ALIASES[normalized] || normalized;
+}
+
+function isSlotActiveStatus(status) {
+    return ACTIVE_SLOT_STATUSES.includes(status);
+}
 
 function generateBookingReference() {
     const date   = new Date();
@@ -621,7 +643,12 @@ async function cancelBooking({ bookingId, reason, cancelledBy }) {
     return sanitizeBooking(updated);
 }
 
-async function updateBookingStatus({ bookingId, status }) {
+async function updateBookingStatus({ bookingId, status, updatedBy }) {
+    const normalizedStatus = normalizeBookingStatus(status);
+    if (!normalizedStatus || !BOOKING_STATUSES.includes(normalizedStatus)) {
+        throw new Error('INVALID_BOOKING_STATUS');
+    }
+
     const booking = await prisma.booking.findUnique({
         where: { id: bookingId }
     });
@@ -629,27 +656,46 @@ async function updateBookingStatus({ bookingId, status }) {
     if (!booking) throw new Error('BOOKING_NOT_FOUND');
 
     const allowedTransitions = ALLOWED_STATUS_TRANSITIONS[booking.status];
-    if (!allowedTransitions.includes(status)) {
+    if (!allowedTransitions || !allowedTransitions.includes(normalizedStatus)) {
         throw new Error('INVALID_STATUS_TRANSITION');
     }
 
-    const updated = await prisma.booking.update({
-        where: { id: bookingId },
-        data:  {
-            status,
-            notes: booking.notes
-                ? `${booking.notes} | Status updated to ${status} by ${req.user.name}`
-                : `Status updated to ${status} by ${req.user.name}`
-        },
-        include: {
-            room:    { select: { id: true, name: true } },
-            user:    { select: { id: true, name: true, email: true } },
-            payments: { select: { id: true, status: true, paymentReference: true } },
-            slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
-        }
+    const updater = updatedBy
+        ? await prisma.user.findUnique({
+            where: { id: updatedBy },
+            select: { id: true, name: true, email: true }
+        })
+        : null;
+
+    const updatedByLabel = updater?.name || updater?.email || updatedBy || 'system';
+    const statusNote = `Status updated to ${normalizedStatus} by ${updatedByLabel}`;
+
+    const updated = await prisma.$transaction(async (tx) => {
+        const updatedBooking = await tx.booking.update({
+            where: { id: bookingId },
+            data:  {
+                status: normalizedStatus,
+                notes: booking.notes
+                    ? `${booking.notes} | ${statusNote}`
+                    : statusNote
+            },
+            include: {
+                room:    { select: { id: true, name: true } },
+                user:    { select: { id: true, name: true, email: true, role: true } },
+                payments: { select: { id: true, status: true, paymentReference: true, paymentType: true, createdAt: true, recordMethod: true, paymentMethod: true, amount: true } },
+                slot: { select: { id: true, title: true, slotDate: true, booked: true, blocked: true, fullDay: true } }
+            }
+        });
+
+        await tx.bookSlot.update({
+            where: { id: booking.slotId },
+            data: { booked: isSlotActiveStatus(normalizedStatus) }
+        });
+
+        return updatedBooking;
     });
 
-    return sanitizeBooking(updated);
+    return updated;
 }
 
 module.exports = {
@@ -661,5 +707,7 @@ module.exports = {
     getBookingById,
     getAllBookings,
     cancelBooking,
-    updateBookingStatus
+    updateBookingStatus,
+    normalizeBookingStatus,
+    BOOKING_STATUSES
 };

@@ -261,4 +261,5 @@ enum BookingStatus {
   COMPLETED
   NO_SHOW
   CHECKED_IN
+  DECLINED
 }

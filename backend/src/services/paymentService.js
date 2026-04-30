@@ -98,7 +98,7 @@ exports.createManualPayment = async (bookingId, amount, paymentType) => {
       if (updatedBooking.amountPaid === updatedBooking.amountCharged) {
         await tx.booking.update({
           where: { id: bookingId },
-          data: { status: 'CONFIRMED', depositPaid: true },
+          data: { status: 'FULLY_PAID', depositPaid: true },
         });
       }
 
@@ -164,7 +164,7 @@ exports.triggerBookingUpdate = async (bookingId) => {
 
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
-      data: { status: 'CONFIRMED' },
+      data: { status: 'FULLY_PAID' },
     });
 
     // TODO: Queue notification (async, don't block webhook response)
