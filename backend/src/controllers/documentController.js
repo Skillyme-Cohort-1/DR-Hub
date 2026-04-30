@@ -28,6 +28,16 @@ function isAdmin(authUser) {
   return authUser && authUser.role === 'ADMIN';
 }
 
+async function ensureUserApproved(userId) {
+  await prisma.user.updateMany({
+    where: {
+      id: userId,
+      status: { not: 'APPROVED' },
+    },
+    data: { status: 'APPROVED' },
+  });
+}
+
 async function createDocument(req, res, next) {
   try {
     const { documentName, documentFile, status, userId } = req.body;
@@ -64,6 +74,10 @@ async function createDocument(req, res, next) {
         userId: ownerId,
       },
     });
+
+    if (normalizedStatus === 'APPROVED') {
+      await ensureUserApproved(ownerId);
+    }
 
     return res.status(201).json({
       message: 'Document created successfully.',
@@ -170,6 +184,10 @@ async function updateDocument(req, res, next) {
       where: { id },
       data,
     });
+
+    if (data.status === 'APPROVED') {
+      await ensureUserApproved(existing.userId);
+    }
 
     if (req.file && existing.documentFile && existing.documentFile.startsWith('/uploads/documents/')) {
       const oldFilePath = path.join(process.cwd(), existing.documentFile.replace(/^\//, ''));

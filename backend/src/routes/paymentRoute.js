@@ -8,6 +8,8 @@ const {
   getPaymentsByUserId,
   updatePaymentStatus,
   getPaymentStats,
+  createManualPayment,
+  getUserPayments,
 } = require('../controllers/paymentController');
 const {
   requireAuth,
@@ -17,18 +19,16 @@ const { verifyBuniSignature } = require('../middleware/webhookValidation');
 
 const router = express.Router();
 
-// User routes
-router.post('/initiate', requireAuth, initiatePayment);
-router.get('/:id', requireAuth, getPaymentById);
-router.get('/booking/:bookingId', requireAuth, getPaymentByBookingId);
+// User routesrouter.get('/:id', requireAuth, getPaymentById);
 
-// Webhook (validate signature)
-router.post('/webhook', verifyBuniSignature, handlePaymentWebhook);
 
 // Admin routes
-router.get('/', requireAuth, requireAdmin, getAllPayments);
+router.get('/', requireAuth, getAllPayments);
 router.get('/user/:userId', requireAuth, requireAdmin, getPaymentsByUserId);
 router.patch('/:id/status', requireAuth, requireAdmin, updatePaymentStatus);
 router.get('/stats/overview', requireAuth, requireAdmin, getPaymentStats);
+
+router.post('/manual', requireAuth, requireAdmin, createManualPayment);
+router.get('/my-payments', requireAuth, getUserPayments);
 
 module.exports = router;

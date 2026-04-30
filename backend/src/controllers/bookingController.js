@@ -116,7 +116,10 @@ async function createBooking(req, res, next) {
             return res.status(400).json({ message: 'Validation failed.', errors });
         }
 
-        const booking = await bookingService.createBooking(data);
+        const booking = await bookingService.createBooking({
+            ...data,
+            userId: req.authUser.id
+        });
 
         return res.status(201).json({
             message: 'Booking created successfully.',
@@ -132,11 +135,26 @@ async function createBooking(req, res, next) {
         if (error.message === 'SLOT_UNAVAILABLE') {
             return res.status(409).json({ message: 'This slot is already booked.' });
         }
+        if (error.message === 'SLOT_NOT_FOUND') {
+            return res.status(404).json({ message: 'Slot not found for this room.' });
+        }
+        if (error.message === 'SLOT_DATE_MISMATCH') {
+            return res.status(400).json({ message: 'Selected slot does not belong to the provided booking date.' });
+        }
+        if (error.message === 'SLOT_BLOCKED') {
+            return res.status(400).json({ message: 'Selected slot is currently blocked.' });
+        }
         if (error.message === 'USER_NOT_ACTIVE') {
             return res.status(403).json({ message: 'Your account is not active. Please contact support.' });
         }
+        if (error.message === 'USER_NOT_FOUND') {
+            return res.status(404).json({ message: 'User not found.' });
+        }
         if (error.message === 'NO_APPROVED_DOCUMENT') {
             return res.status(403).json({ message: 'You must have an approved qualification document before booking.' });
+        }
+        if (error.message === 'INVALID_TOTAL_COST') {
+            return res.status(400).json({ message: 'Provided totalCost does not match the room cost.' });
         }
         if (error.message === 'ROOM_COST_NOT_SET') {
             return res.status(400).json({ message: 'This room does not have a price set. Please contact support.' });
@@ -371,8 +389,9 @@ async function updateBookingStatus(req, res, next) {
         const { id } = req.params;
         const { status } = req.body;
 
-        const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'];
-        if (!status || !allowedStatuses.includes(status)) {
+        const allowedStatuses = bookingService.BOOKING_STATUSES;
+        const normalizedStatus = bookingService.normalizeBookingStatus(status);
+        if (!normalizedStatus || !allowedStatuses.includes(normalizedStatus)) {
             return res.status(400).json({
                 message: `status must be one of: ${allowedStatuses.join(', ')}`
             });
@@ -385,7 +404,7 @@ async function updateBookingStatus(req, res, next) {
 
         const booking = await bookingService.updateBookingStatus({
             bookingId: id,
-            status,
+            status: normalizedStatus,
             updatedBy: req.authUser.id
         });
 
@@ -394,6 +413,14 @@ async function updateBookingStatus(req, res, next) {
             booking
         });
     } catch (error) {
+        if (error.message === 'BOOKING_NOT_FOUND') {
+            return res.status(404).json({ message: 'Booking not found.' });
+        }
+        if (error.message === 'INVALID_BOOKING_STATUS') {
+            return res.status(400).json({
+                message: `status must be one of: ${bookingService.BOOKING_STATUSES.join(', ')}`
+            });
+        }
         if (error.message === 'INVALID_STATUS_TRANSITION') {
             return res.status(400).json({ message: 'This status transition is not allowed.' });
         }

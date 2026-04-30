@@ -20,7 +20,7 @@ export const Stepper = ({ steps, currentStep }) => {
     };
 
     return (
-        <section className="mx-auto flex w-full  flex-col gap-8 px-4 py-8 md:px-8 lg:px-12 items-center bg-[#050505]">
+        <section className="mx-auto flex w-full  flex-col gap-8 px-4 py-8 md:px-8 lg:px-12 items-center bg-[#0F1A2E]">
             <div className="rounded-2xl  p-5 md:p-7">
                 <div className="flex w-full items-center overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     {steps.map((step, index) => (
@@ -30,7 +30,7 @@ export const Stepper = ({ steps, currentStep }) => {
                                     className={`z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
                                         index <= activeStep
                                             ? 'border-[#EC7B1D] bg-[#EC7B1D] text-white'
-                                            : 'border-gray-800  text-gray-200'
+                                            : 'border-slate-700/50  text-gray-200'
                                     }`}
                                 >
                                     {index < activeStep ? '✓' : index + 1}
@@ -45,7 +45,7 @@ export const Stepper = ({ steps, currentStep }) => {
                             {index < steps.length - 1 && (
                                 <span
                                     className={`mx-3 h-0.5 w-12 md:w-20 lg:w-28 ${
-                                        index < activeStep ? 'bg-[#EC7B1D]' : 'bg-gray-100'
+                                        index < activeStep ? 'bg-[#EC7B1D]' : 'bg-slate-600'
                                     }`}
                                     aria-hidden="true"
                                 />
@@ -55,7 +55,7 @@ export const Stepper = ({ steps, currentStep }) => {
                 </div>
             </div>
             <div className="grid gap-5 w-full max-h-screen grid-cols-1 lg:grid-cols-[1fr_430px] ">
-                <div className="border border-gray-800 lg:h-[72vh] lg:overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <div className="border border-slate-700/50 lg:h-[72vh] lg:overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     <SpaceBox
                         onSpaceChange={setSelectedSpace}
                         onNext={goToNextStep}
