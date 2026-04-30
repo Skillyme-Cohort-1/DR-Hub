@@ -1,17 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Smartphone, Wallet } from "lucide-react";
-
-const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
-
-function phoneOk(phone) {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length >= 9 && digits.length <= 15;
-}
 
 export function BookingPaymentPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const booking = location.state?.booking;
   const reservationTypeName = location.state?.reservationTypeName || booking?.room?.name || "Room booking";
   const slotTitle = location.state?.slotTitle || "Selected slot";
@@ -26,11 +18,6 @@ export function BookingPaymentPage() {
   })();
   const fallbackFee = roleFromStorage === "MEMBER" ? 1000 : 2000;
   const bookingFee = Number(location.state?.bookingFee || fallbackFee);
-  const defaultPhone = location.state?.defaultPhone || "";
-
-  const [mpesaPhone, setMpesaPhone] = useState(defaultPhone);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [paymentError, setPaymentError] = useState("");
   const [paymentType, setPaymentType] = useState("deposit");
 
   const bookingReference = useMemo(
@@ -50,55 +37,6 @@ export function BookingPaymentPage() {
   if (!booking?.id) {
     return <Navigate to="/booking" replace />;
   }
-
-  const handlePayBookingFee = async () => {
-    if (!phoneOk(mpesaPhone)) {
-      setPaymentError("Enter a valid M-Pesa phone number.");
-      return;
-    }
-
-    setPaymentLoading(true);
-    setPaymentError("");
-    try {
-      const token = localStorage.getItem("authToken") || "";
-      const response = await fetch(`${API_BASE}/api/payments/mpesa/stk-push`, {
-        method: "POST",
-        headers: {
-          Accept: "*/*",
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          phoneNumber: mpesaPhone.replace(/\s+/g, "").replace(/^\+/, ""),
-          amount: payableAmount,
-          bookingId: booking.id,
-        }),
-      });
-
-      const responseText = await response.text();
-      let payload = null;
-      try {
-        payload = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(payload?.message || "Payment request failed. Please try again.");
-      }
-
-      navigate("/booking/success", {
-        replace: true,
-        state: {
-          bookingRef: bookingReference,
-        },
-      });
-    } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : "Unable to process payment.");
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#0F1A2E] text-white antialiased">
@@ -193,33 +131,26 @@ export function BookingPaymentPage() {
           </div>
         </div>
 
-        <div className="mt-6">
-          <label htmlFor="mpesa-phone" className="mb-2 flex items-center gap-2 text-sm font-medium text-white/80">
-            <Smartphone className="h-4 w-4 text-[#E67E22]" aria-hidden />
-            M-Pesa phone number
-          </label>
-          <input
-            id="mpesa-phone"
-            type="tel"
-            value={mpesaPhone}
-            onChange={(e) => setMpesaPhone(e.target.value)}
-            className="w-full max-w-xs rounded-lg border border-white/10 bg-[#162032] px-4 py-3 text-white outline-none focus:border-[#E67E22]/50 focus:ring-2 focus:ring-[#E67E22]/20"
-            placeholder="e.g. 0712 345 678"
-          />
-          <p className="mt-2 text-xs text-white/45">Use the number that should receive the STK push prompt.</p>
-        </div>
-
-        {paymentError ? <p className="mt-4 text-sm text-red-300">{paymentError}</p> : null}
-
-        <div className="mt-8">
-          <button
-            type="button"
-            onClick={handlePayBookingFee}
-            disabled={paymentLoading}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#E67E22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#d35400] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {paymentLoading ? "Processing…" : `Pay now · Ksh ${payableAmount.toLocaleString()}`}
-          </button>
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#E67E22]">
+            <Smartphone className="h-4 w-4" aria-hidden />
+            M-Pesa Payment Details
+          </h2>
+          <dl className="space-y-3 text-sm text-white/75">
+            <div className="flex justify-between gap-4">
+              <dt>Pay Bill</dt>
+              <dd className="text-right font-mono font-semibold text-white">522522</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Account Number</dt>
+              <dd className="text-right font-mono font-semibold text-white">1302541374</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Account Name</dt>
+              <dd className="text-right font-semibold text-white">Full Circle Dispute Resolution Hub</dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-xs text-white/45">Use the details above to make your M-Pesa payment.</p>
         </div>
       </main>
     </div>

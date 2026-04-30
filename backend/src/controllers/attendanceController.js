@@ -41,8 +41,8 @@ async function checkInMemberController(req, res, next) {
 
 async function checkOutMemberController(req, res, next) {
     try {
-        const { checkInId } = req.body;
-        const result = await attendanceService.createMemberCheckOut({ checkInId });
+        const { bookingId } = req.body;
+        const result = await attendanceService.createMemberCheckOut({ bookingId });
         return res.status(200).json(result);
     } catch (error) {
         if (error.message === 'BOOKING_NOT_FOUND') {

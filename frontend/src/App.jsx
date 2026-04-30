@@ -6,6 +6,7 @@ import { LoginPage } from './app/pages/LoginPage';
 import { RegisterPage } from './app/pages/RegisterPage';
 import { BookingPage } from './app/pages/BookingPage';
 import { BookingPaymentPage } from './app/pages/BookingPaymentPage';
+import { BookingDetailsPage } from './app/pages/BookingDetailsPage';
 import { BookingSuccessPage } from './app/pages/BookingSuccessPage';
 import { ClientDashboard } from './app/pages/ClientDashboardPage';
 import { Toaster } from "@/components/ui/sonner"
@@ -69,6 +70,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <BookingSuccessPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/booking/:id"
+          element={
+            <PrivateRoute>
+              <BookingDetailsPage />
             </PrivateRoute>
           }
         />
