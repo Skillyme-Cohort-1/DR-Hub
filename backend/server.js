@@ -14,6 +14,7 @@ const contactRoutes = require('./src/routes/contactRoutes');
 const bookingSlotRoutes = require("./src/routes/slotsRoutes")
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const exportRoutes = require('./src/routes/exportRoutes');
+const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 const app = express();
 
@@ -28,6 +29,11 @@ app.get('/', (req, res) => {
   res.send('DRHub backend is running.');
 });
 
+// Direct test route
+app.get('/api/analytics-test', (req, res) => {
+  res.json({ message: 'Direct route works!', timestamp: new Date().toISOString() });
+});
+
 app.use('/api/users', userAuthRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/rooms', roomRoutes);
@@ -39,6 +45,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/slots', bookingSlotRoutes);
 app.use('/api/attendances', attendanceRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.use((error, req, res, next) => {
   if (error && error.type === 'entity.too.large') {
