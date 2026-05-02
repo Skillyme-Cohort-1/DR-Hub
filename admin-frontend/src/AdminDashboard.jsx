@@ -287,7 +287,7 @@ function DashboardContent() {
             <NotificationsPage bookings={bookings} setBookings={setBookings} token={token} />
           )}
           {activeNav === "analytics" && (
-            <AnalyticsPage bookings={bookings} calendarRooms={calendarRooms} />
+            <AnalyticsPage bookings={bookings} calendarRooms={calendarRooms} users={users} />
           )}
           {activeNav === "attendances" && (
             <AttendancesPage attendances={attendances} loading={attendancesLoading} token={token} refetch={refetchAttendances} />
