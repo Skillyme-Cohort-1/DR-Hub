@@ -19,7 +19,7 @@ import { ProfileSection } from "../components/dashboard/ProfileSection";
 export function ClientDashboard() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("metrics");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen]     = useState(false);
 
   const { profileForm, profileLoading, updateField } = useProfile();
   const { myBookings, bookingsLoading, bookingsError, upcomingBookings, stats } = useBookings();
@@ -33,13 +33,13 @@ export function ClientDashboard() {
   };
 
   const handlePayDeposit = (booking) => {
-    const role = (profileForm.role || "").toUpperCase();
+    const role       = (profileForm.role || "").toUpperCase();
     const bookingFee = role === "MEMBER" ? 1000 : 2000;
     navigate("/booking/pay", {
       state: {
         booking,
         bookingFee,
-        defaultPhone: profileForm.phoneNumber || "",
+        defaultPhone:        profileForm.phoneNumber || "",
         reservationTypeName: booking?.room?.name || "Room booking",
       },
     });
@@ -103,7 +103,7 @@ export function ClientDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F1A2E]">
+    <div className="min-h-screen bg-background text-foreground">
       <DashboardHeader
         profileForm={profileForm}
         onLogout={handleLogout}
