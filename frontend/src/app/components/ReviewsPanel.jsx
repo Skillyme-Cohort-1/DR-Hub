@@ -6,6 +6,17 @@ import reviewsData from '../data/reviews.json';
 
 const GOOGLE_REVIEWS_URL = reviewsData.googleUrl || 'https://www.google.com/search?q=DR+Hub+reviews';
 const DEFAULT_RATING = 5;
+const REVIEW_SNIPPET_LIMIT = 120;
+
+function formatReviewSnippet(quote, limit = REVIEW_SNIPPET_LIMIT) {
+  const cleanQuote = String(quote || '').trim();
+
+  if (cleanQuote.length <= limit) {
+    return cleanQuote;
+  }
+
+  return `${cleanQuote.slice(0, limit).trimEnd()}...`;
+}
 
 export default function ReviewsPanel({ maxItems = 3 }) {
   const [reviews, setReviews] = useState(reviewsData.reviews || []);
@@ -41,10 +52,12 @@ export default function ReviewsPanel({ maxItems = 3 }) {
         visibleReviews.length
       ).toFixed(1)
     : DEFAULT_RATING.toFixed(1);
+  const featuredReview = visibleReviews[0];
+  const supportingReviews = visibleReviews.slice(1);
 
   return (
-    <aside className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0B0B] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
-      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[#E87722]/45 to-transparent" />
+    <aside className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0B0B0B] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
+      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-[#E87722]/45 to-transparent" />
 
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -68,58 +81,75 @@ export default function ReviewsPanel({ maxItems = 3 }) {
         </a>
       </div>
 
-      <div className="mb-5 rounded-2xl border border-white/8 bg-white/[0.03] p-4 backdrop-blur-sm">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-1 text-[#E87722]" aria-label={`${averageRating} out of 5 stars`}>
-              {Array.from({ length: DEFAULT_RATING }).map((_, i) => (
-                <Star key={i} className="h-4 w-4 fill-current" aria-hidden />
-              ))}
-            </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold tracking-tight text-white">{averageRating}</span>
-              <span className="text-sm text-white/45">/ 5.0</span>
-            </div>
+      <div className="mb-5 grid gap-4 rounded-3xl border border-white/10 bg-linear-to-br from-white/5 to-white/2 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div>
+          <div className="flex items-center gap-1 text-[#E87722]" aria-label={`${averageRating} out of 5 stars`}>
+            {Array.from({ length: DEFAULT_RATING }).map((_, i) => (
+              <Star key={i} className="h-4 w-4 fill-current" aria-hidden />
+            ))}
           </div>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.18em] text-white/35">Featured voices</p>
-            <p className="mt-2 text-sm font-medium text-white/75">{visibleReviews.length || maxItems} recent testimonials</p>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold tracking-tight text-white">{averageRating}</span>
+            <span className="text-sm text-white/45">/ 5.0</span>
           </div>
+        </div>
+        <div className="sm:text-right">
+          <p className="text-xs uppercase tracking-[0.18em] text-white/35">Featured voices</p>
+          <p className="mt-2 text-sm font-medium text-white/75">{visibleReviews.length || maxItems} recent testimonials</p>
         </div>
       </div>
 
-      <div className="space-y-3.5">
-        {visibleReviews.length > 0 ? (
-          visibleReviews.map((r) => (
-            <article
-              key={r.name}
-              className="group rounded-2xl border border-white/8 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-4 transition-colors hover:border-[#E87722]/20"
-            >
-              <div className="mb-3 flex items-start justify-between gap-3">
+      {visibleReviews.length > 0 ? (
+        <div className="space-y-4">
+          {featuredReview ? (
+            <article className="relative overflow-hidden rounded-3xl border border-white/10 bg-linear-to-br from-white/6 via-white/3 to-white/0 p-5 transition-colors hover:border-[#E87722]/20 sm:p-6">
+              <div className="absolute right-4 top-4 rounded-full border border-[#E87722]/15 bg-[#E87722]/10 p-2 text-[#E87722]">
+                <Quote className="h-3.5 w-3.5" aria-hidden />
+              </div>
+              <div className="flex items-start justify-between gap-3 pr-10">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-white/90">{r.name}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{r.role}</div>
+                  <p className="text-sm font-semibold text-white/95">{featuredReview.name}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">{featuredReview.role}</p>
                 </div>
-                <div className="rounded-full border border-[#E87722]/15 bg-[#E87722]/10 p-2 text-[#E87722]">
-                  <Quote className="h-3.5 w-3.5" aria-hidden />
+                <div className="flex items-center gap-1 text-[#E87722]" aria-hidden>
+                  {Array.from({ length: Number(featuredReview.rating) || DEFAULT_RATING }).map((_, i) => (
+                    <Star key={i} className="h-4 w-4 fill-current" />
+                  ))}
                 </div>
               </div>
-
-              <div className="mb-3 flex items-center gap-1 text-[#E87722]" aria-hidden>
-                {Array.from({ length: Number(r.rating) || DEFAULT_RATING }).map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-current" />
-                ))}
-              </div>
-
-              <p className="text-sm leading-6 text-white/68">"{r.quote}"</p>
+              <p className="mt-4 text-base leading-7 text-white/78">“{formatReviewSnippet(featuredReview.quote)}”</p>
             </article>
-          ))
-        ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-white/60">
-            {loading ? 'Loading reviews...' : error ? 'Unable to load reviews' : 'No reviews available'}
-          </div>
-        )}
-      </div>
+          ) : null}
+
+          {supportingReviews.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {supportingReviews.map((review) => (
+                <article
+                  key={review.name}
+                  className="rounded-2xl border border-white/8 bg-white/2 p-4 transition-colors hover:border-[#E87722]/20 hover:bg-white/4"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white/90">{review.name}</p>
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/35">{review.role}</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-[#E87722]" aria-hidden>
+                      {Array.from({ length: Number(review.rating) || DEFAULT_RATING }).map((_, i) => (
+                        <Star key={i} className="h-3.5 w-3.5 fill-current" />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm leading-6 text-white/62">{formatReviewSnippet(review.quote, 86)}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-3xl border border-dashed border-white/10 bg-white/2 px-4 py-6 text-center text-sm text-white/60">
+          {loading ? 'Loading reviews...' : error ? 'Unable to load reviews' : 'No reviews available'}
+        </div>
+      )}
 
       <div className="mt-5">
         <Button
