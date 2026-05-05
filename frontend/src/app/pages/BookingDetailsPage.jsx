@@ -4,7 +4,9 @@ import { ArrowLeft, Building2, Calendar, Clock, CreditCard, FileText, User } fro
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { formatBookingDate, formatCurrency, formatStatus, formatProfileDate } from "../lib/formatters";
 
-const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
+import { BACKEND_URL } from "../../services/constants";
+
+const API_BASE = BACKEND_URL.replace(/\/$/, "");
 
 export function BookingDetailsPage() {
   const { id } = useParams();

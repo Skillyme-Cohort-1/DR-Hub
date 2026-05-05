@@ -7,6 +7,8 @@ import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 import { useTheme } from "../components/ThemeContext";
 
+import { BACKEND_URL } from "../../services/constants";
+
 const contactCards = [
   { icon: Mail,   title: "Email",         content: "disputeresolutionhub@gmail.com", href: "mailto:disputeresolutionhub@gmail.com" },
   { icon: Phone,  title: "Phone",         content: "1234567890",                     href: "tel:1234567890" },
@@ -19,7 +21,7 @@ const inputClass =
 
 export default function ContactPage() {
   const { theme } = useTheme();
-  const [form, setForm]               = useState({ fullName: "", email: "", message: "" });
+  const [form, setForm]               = useState({ fullName: "", email: "", message: "", phoneNumber: "" });
   const [errors, setErrors]           = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState({ type: "idle", message: "" });
@@ -30,11 +32,12 @@ export default function ContactPage() {
         fullName: yup.string().trim().min(2, "Full name must be at least 2 characters").max(120).required("Full name is required"),
         email:    yup.string().trim().email("Enter a valid email address").required("Email is required"),
         message:  yup.string().trim().min(10, "Message must be at least 10 characters").max(2000).required("Message is required"),
+        phoneNumber: yup.string().trim().min(10, "Phone number must be at least 10 characters").max(20).required("Phone number is required"),
       }),
     []
   );
 
-  const contactEndpoint = `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "")}/api/contact`;
+  const contactEndpoint = `${BACKEND_URL}/api/contact`;
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -53,7 +56,7 @@ export default function ContactPage() {
       const response = await fetch(contactEndpoint, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(payload),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -68,7 +71,7 @@ export default function ContactPage() {
       const msg = data?.message || "Your message has been sent. We will contact you soon.";
       setSubmitState({ type: "success", message: msg });
       toast.success(msg);
-      setForm({ fullName: "", email: "", message: "" });
+      setForm({ fullName: "", email: "", message: "", phoneNumber: "" });
     } catch (error) {
       if (error.name === "ValidationError") {
         const nextErrors = {};
@@ -171,6 +174,11 @@ export default function ContactPage() {
                   <label htmlFor="email" className="mb-2 block text-sm font-medium text-foreground/85">Email</label>
                   <input id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={handleChange} className={inputClass} placeholder="you@example.com" />
                   {errors.email ? <p className="mt-2 text-xs text-red-400">{errors.email}</p> : null}
+                </div>
+                <div>
+                  <label htmlFor="phoneNumber" className="mb-2 block text-sm font-medium text-foreground/85">Phone Number</label>
+                  <input id="phoneNumber" name="phoneNumber" type="tel" autoComplete="tel" value={form.phoneNumber} onChange={handleChange} className={inputClass} placeholder="Enter your phone number" />
+                  {errors.phoneNumber ? <p className="mt-2 text-xs text-red-400">{errors.phoneNumber}</p> : null}
                 </div>
 
                 <div>
