@@ -1,5 +1,6 @@
 import './App.css';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ThemeProvider } from './app/components/ThemeContext';
 
 import HomePage from './app/pages/HomePage';
 import { LoginPage } from './app/pages/LoginPage';
@@ -29,7 +30,8 @@ function PublicOnlyRoute({ children }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
       <Toaster richColors position="top-right"/>
       <Routes>
         <Route path="/" element={isAuthenticated() ? <Navigate to="/dashboard" replace /> : <HomePage />} />
@@ -94,5 +96,6 @@ export default function App() {
         />
       </Routes>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
