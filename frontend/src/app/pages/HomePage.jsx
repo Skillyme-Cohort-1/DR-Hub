@@ -166,9 +166,7 @@ export default function HomePage() {
                 professional work.
               </p>
             </div>
-
             <RoomsSection />
-            
           </div>
         </section>
 
