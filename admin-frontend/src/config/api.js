@@ -1,4 +1,5 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { BACKEND_URL } from "../utils/constants";
+export const API_BASE_URL = BACKEND_URL.endsWith("/") ? BACKEND_URL.slice(0, -1) : BACKEND_URL;
 
 export async function apiFetch(path, { token, method = "GET", body, headers = {} } = {}) {
   const config = {

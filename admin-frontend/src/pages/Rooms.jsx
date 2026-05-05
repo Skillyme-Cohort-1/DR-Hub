@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const API_URL = 'http://localhost:3000/api/rooms';
+import { BACKEND_URL } from '../utils/constants.jsx';
+
+const API_URL = `${BACKEND_URL}/api/rooms`;
 
 export default function Rooms() {
   const { token } = useAuth();  // Get the auth token
