@@ -7,7 +7,7 @@ export const roomService = {
     // Get all rooms
     getAllRooms: async () => {
         try {
-            const res = await API.get('/rooms');
+            const res = await API.get('/api/rooms');
             return res.data;
         } catch (error) {
             console.error('Error fetching rooms:', error.response?.data || error.message);
@@ -18,7 +18,7 @@ export const roomService = {
     // Fetch room by id
     getRoomById: async (id) => {
         try {
-            const res = await API.get(`/rooms/${id}`);
+            const res = await API.get(`/api/rooms/${id}`);
             return res.data;
         } catch (error) {
             console.error('Error fetching room by id:', error.response?.data || error.message);

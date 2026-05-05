@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "../lib/auth";
+import { BACKEND_URL } from "../../services/constants";
 
 export function useDocuments() {
   const [documents, setDocuments] = useState([]);
@@ -24,7 +25,7 @@ export function useDocuments() {
         return;
       }
 
-      const response = await fetch("http://localhost:3000/api/documents", {
+      const response = await fetch(`${BACKEND_URL}/api/documents`, {
         method: "GET",
         headers: {
           Accept: "*/*",
@@ -69,7 +70,7 @@ export function useDocuments() {
 
     setUploadingDocument(true);
     try {
-      const response = await fetch("http://localhost:3000/api/documents", {
+      const response = await fetch(`${BACKEND_URL}/api/documents`, {
         method: "POST",
         headers: {
           Accept: "*/*",
@@ -102,7 +103,7 @@ export function useDocuments() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/documents/${documentId}`, {
+      const response = await fetch(`${BACKEND_URL}/api/documents/${documentId}`, {
         method: "DELETE",
         headers: {
           Accept: "*/*",
@@ -130,7 +131,7 @@ export function useDocuments() {
     }
 
     try {
-      const response = await fetch(documentItem.downloadUrl, {
+      const response = await fetch(`${BACKEND_URL}${documentItem.downloadUrl}`, {
         method: "GET",
         headers: {
           Accept: "*/*",
@@ -166,7 +167,7 @@ export function useDocuments() {
     }
 
     try {
-      const response = await fetch(documentItem.downloadUrl, {
+      const response = await fetch(`${BACKEND_URL}${documentItem.downloadUrl}`, {
         method: "GET",
         headers: {
           Accept: "*/*",

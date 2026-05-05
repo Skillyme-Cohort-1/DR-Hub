@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "../lib/auth";
+import { BACKEND_URL } from "../../services/constants";
 
 const EMPTY_PROFILE = {
   id: "",
@@ -52,7 +53,7 @@ export function useProfile() {
         return;
       }
 
-      const response = await fetch("http://localhost:3000/api/users/profile", {
+      const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
         method: "GET",
         headers: {
           Accept: "*/*",
