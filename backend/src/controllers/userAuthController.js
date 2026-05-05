@@ -4,6 +4,8 @@ const prisma = require('../lib/prisma');
 const { signAccessToken, generateResetToken, hashToken } = require('../lib/auth');
 const { sendActivationEmail } = require('../../emails');
 
+const { BACKEND_URL } = require('../services/constants');
+
 const PASSWORD_MIN_LENGTH = 8;
 const BCRYPT_ROUNDS = 12;
 const ALLOWED_ROLES = ['ADMIN', 'MEMBER'];
@@ -12,7 +14,7 @@ const ALLOWED_STATUSES = ['ACTIVE', 'INACTIVE'];
 const ACTIVATION_TOKEN_EXPIRES_HOURS = Number(process.env.ACTIVATION_TOKEN_EXPIRES_HOURS || 24);
 
 function getActivationUrl(rawToken) {
-  const baseUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const baseUrl = BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
   const url = new URL('/api/users/activate-account', baseUrl);
   url.searchParams.set('token', rawToken);
   return url.toString();
