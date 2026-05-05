@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BACKEND_URL } from "../../services/constants";
 import {
   ArrowLeft,
   ArrowRight,
@@ -67,7 +68,7 @@ const initialForm = {
   attendees: 1,
 };
 
-const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
+const API_BASE = BACKEND_URL.replace(/\/$/, "");
 
 function todayISODate() {
   const d = new Date();

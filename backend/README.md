@@ -372,7 +372,7 @@ const { sendActivationEmail } = require('../emails');
 await sendActivationEmail({
   to: 'user@example.com',
   name: 'Jane',
-  activationUrl: 'http://localhost:3000/api/users/activate-account?token=abc',
+  activationUrl: 'https://drhubbackend-6cucc.ondigitalocean.app/api/users/activate-account?token=abc',
 });
 ```
 

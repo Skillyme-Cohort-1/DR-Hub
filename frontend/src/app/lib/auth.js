@@ -1,4 +1,5 @@
-export const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
+import { BACKEND_URL } from "../../services/constants";
+export const API_BASE = BACKEND_URL;
 
 export function getStoredAccessToken() {
   const directToken =

@@ -5,6 +5,7 @@ import { Logo } from "../components/Logo";
 import { Button } from "../components/ui/button";
 import registerImg from "../../assets/registerImage.jpg";
 import { ArrowRight, User, Mail, Phone, Briefcase } from "lucide-react";
+import { BACKEND_URL } from "../../services/constants";
 
 const inputClass =
   "w-full bg-card border border-border text-foreground placeholder:text-foreground/35 h-12 rounded-none pl-12 pr-4 text-sm outline-none transition-colors focus:border-[#E87722] focus:ring-2 focus:ring-[#E87722]/20";
@@ -52,7 +53,7 @@ export function RegisterPage() {
 
     let response;
     try {
-      response = await fetch("http://localhost:3000/api/users/self-registration", {
+      response = await fetch(`${BACKEND_URL}/api/users/self-registration`, {
         method:  "POST",
         headers: { Accept: "*/*", "Content-Type": "application/json" },
         body:    JSON.stringify(payload),

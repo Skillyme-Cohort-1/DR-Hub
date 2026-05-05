@@ -5,6 +5,8 @@ import { Button } from '../components/ui/button';
 import loginImg from '../../assets/loginImage.jpg';
 import { Eye, EyeOff, ArrowRight, Lock, Mail } from 'lucide-react';
 
+import { BACKEND_URL } from '../../services/constants';
+
 export function LoginPage() {
   const navigate       = useNavigate();
   const [searchParams] = useSearchParams();
@@ -24,7 +26,7 @@ export function LoginPage() {
 
     let response;
     try {
-      response = await fetch('http://localhost:3000/api/users/login', {
+      response = await fetch(`${BACKEND_URL}/api/users/login`, {
         method:  'POST',
         headers: { Accept: '*/*', 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email, password }),
