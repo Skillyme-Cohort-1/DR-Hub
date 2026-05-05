@@ -9,7 +9,7 @@ const {
 const router = express.Router();
 
 router.get('/', getAllMessages)
-router.post('/', requireAuth, requireAdmin, submitContactForm);
+router.post('/', submitContactForm);
 
 
 module.exports = router;
