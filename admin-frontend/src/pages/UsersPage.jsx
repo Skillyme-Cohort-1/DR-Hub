@@ -29,7 +29,7 @@ export default function UsersPage({ users, usersLoading, usersError, token, onRe
     setFormError("");
     try {
       if (!editingId) {
-        await apiFetch("/api/users/register", { method: "POST", body: { name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role } });
+        await apiFetch("/api/users/register", { method: "POST", body: { name: form.name.trim(), email: form.email.trim(), password: form.password, phoneNumber: form.phoneNumber.trim() || null, gender: form.gender || null, role: form.role } });
         addToast("User created successfully", "green", "\u2713");
       } else {
         await apiFetch(`/api/users/${editingId}`, { token, method: "PATCH", body: { name: form.name.trim(), email: form.email.trim(), phoneNumber: form.phoneNumber || null, gender: form.gender || null, address: form.address || null, city: form.city || null, country: form.country || null, occupation: form.occupation || null, status: form.status, role: form.role } });
@@ -94,6 +94,10 @@ export default function UsersPage({ users, usersLoading, usersError, token, onRe
           {!editingId && (
             <>
               <div className="dh-form-group"><label>Password *</label><input type="password" minLength={8} value={form.password} onChange={set("password")} placeholder="At least 8 characters" /></div>
+              <div className="dh-form-row">
+                <div className="dh-form-group"><label>Phone Number</label><input value={form.phoneNumber} onChange={set("phoneNumber")} placeholder="+254..." /></div>
+                <div className="dh-form-group"><label>Gender</label><select value={form.gender} onChange={set("gender")}><option value="">Not set</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option><option value="OTHER">OTHER</option></select></div>
+              </div>
               <div className="dh-form-group"><label>Role</label><select value={form.role} onChange={set("role")}><option value="MEMBER">MEMBER</option><option value="ADMIN">ADMIN</option></select></div>
             </>
           )}

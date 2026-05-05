@@ -5,13 +5,15 @@ const crypto                      = require('crypto');
 const { hashToken }               = require('../lib/auth');
 const { sendBookingPendingEmail, sendActivationEmail } = require('../../emails');
 
+const { BACKEND_URL } = require("../services/constants");
+
 const CANCELLATION_WINDOW_HOURS = 24;
 const BCRYPT_ROUNDS = 12;
 const DEFAULT_GUEST_PASSWORD = 'DrHub@12345';
 const ACTIVATION_TOKEN_EXPIRES_HOURS = Number(process.env.ACTIVATION_TOKEN_EXPIRES_HOURS || 24);
 
 function getActivationUrl(rawToken) {
-    const baseUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const baseUrl = BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
     const url = new URL('/api/users/activate-account', baseUrl);
     url.searchParams.set('token', rawToken);
     return url.toString();
